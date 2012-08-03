@@ -203,6 +203,8 @@ struct msm_fb_data_type {
 	u32 writeback_state;
 	bool writeback_active_cnt;
 	int cont_splash_done;
+	void *copy_splash_buf;
+	unsigned char *copy_splash_phys;
 	u32 acq_fen_cnt;
 	struct sync_fence *acq_fen[MDP_MAX_FENCE_FD];
 	int cur_rel_fen_fd;
