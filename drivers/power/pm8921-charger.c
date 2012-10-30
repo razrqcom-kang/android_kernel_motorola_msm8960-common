@@ -2055,7 +2055,6 @@ static void handle_usb_insertion_removal(struct pm8921_chg_chip *chip)
 		schedule_delayed_work(&chip->unplug_check_work,
 			round_jiffies_relative(msecs_to_jiffies
 				(UNPLUG_CHECK_WAIT_PERIOD_MS)));
-		pm8921_chg_enable_irq(chip, CHG_GONE_IRQ);
 	} else {
 		pm8921_chg_disable_irq(chip, CHG_GONE_IRQ);
 	}
@@ -2234,12 +2233,6 @@ static irqreturn_t usbin_valid_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t usbin_ov_irq_handler(int irq, void *data)
-{
-	pr_err("USB OverVoltage\n");
-	return IRQ_HANDLED;
-}
-
 static irqreturn_t batt_inserted_irq_handler(int irq, void *data)
 {
 	struct pm8921_chg_chip *chip = data;
@@ -2283,12 +2276,6 @@ static irqreturn_t vbatdet_low_irq_handler(int irq, void *data)
 	power_supply_changed(&chip->usb_psy);
 	power_supply_changed(&chip->dc_psy);
 
-	return IRQ_HANDLED;
-}
-
-static irqreturn_t usbin_uv_irq_handler(int irq, void *data)
-{
-	pr_err("USB UnderVoltage\n");
 	return IRQ_HANDLED;
 }
 
@@ -2381,6 +2368,7 @@ static void attempt_reverse_boost_fix(struct pm8921_chg_chip *chip,
 {
 	pr_debug("count = %d Entered\n", count);
 	pm8921_charger_vbus_draw(500);
+	mdelay(1);
 	pr_debug("count = %d iusb=500mA\n", count);
 	disable_input_voltage_regulation(chip);
 	pr_debug("count = %d disable_input_regulation\n", count);
@@ -2426,6 +2414,8 @@ static void unplug_check_worker(struct work_struct *work)
 		 }
 		return;
 	}
+
+	pm8921_chg_enable_irq(chip, CHG_GONE_IRQ);
 
 	usb_chg_plugged_in = is_usb_chg_plugged_in(chip);
 	if (!usb_chg_plugged_in) {
@@ -2591,6 +2581,7 @@ static irqreturn_t chg_gone_irq_handler(int irq, void *data)
 		return IRQ_HANDLED;
 
 	schedule_work(&chip->unplug_ovp_fet_open_work);
+	pm8921_chg_disable_irq(chip, CHG_GONE_IRQ);
 
 	power_supply_changed(&chip->batt_psy);
 	power_supply_changed(&chip->usb_psy);
@@ -3337,13 +3328,10 @@ struct pm_chg_irq_init_data {
 struct pm_chg_irq_init_data chg_irq_data[] = {
 	CHG_IRQ(USBIN_VALID_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 						usbin_valid_irq_handler),
-	CHG_IRQ(USBIN_OV_IRQ, IRQF_TRIGGER_RISING, usbin_ov_irq_handler),
 	CHG_IRQ(BATT_INSERTED_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 						batt_inserted_irq_handler),
 	CHG_IRQ(VBATDET_LOW_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 						vbatdet_low_irq_handler),
-	CHG_IRQ(USBIN_UV_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
-							usbin_uv_irq_handler),
 	CHG_IRQ(VBAT_OV_IRQ, IRQF_TRIGGER_RISING, vbat_ov_irq_handler),
 	CHG_IRQ(CHGWDOG_IRQ, IRQF_TRIGGER_RISING, chgwdog_irq_handler),
 	CHG_IRQ(VCP_IRQ, IRQF_TRIGGER_RISING, vcp_irq_handler),
@@ -3363,8 +3351,7 @@ struct pm_chg_irq_init_data chg_irq_data[] = {
 	CHG_IRQ(CHGHOT_IRQ, IRQF_TRIGGER_RISING, chghot_irq_handler),
 	CHG_IRQ(BATTTEMP_COLD_IRQ, IRQF_TRIGGER_RISING,
 						batttemp_cold_irq_handler),
-	CHG_IRQ(CHG_GONE_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
-						chg_gone_irq_handler),
+	CHG_IRQ(CHG_GONE_IRQ, IRQF_TRIGGER_RISING, chg_gone_irq_handler),
 	CHG_IRQ(BAT_TEMP_OK_IRQ, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 						bat_temp_ok_irq_handler),
 	CHG_IRQ(COARSE_DET_LOW_IRQ, IRQF_TRIGGER_RISING,
