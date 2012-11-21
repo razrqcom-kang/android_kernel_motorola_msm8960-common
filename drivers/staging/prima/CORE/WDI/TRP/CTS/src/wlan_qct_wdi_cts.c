@@ -866,7 +866,6 @@ WCTS_CloseTransport
    /* release the resource */
    pWCTSCb->wctsMagic = 0;
    wpalMemoryFree(pWCTSCb);
-   gwctsHandle = NULL;
 
    return eWLAN_PAL_STATUS_SUCCESS;
 

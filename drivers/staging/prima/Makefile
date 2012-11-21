@@ -4,6 +4,9 @@ BUILD_DEBUG_VERSION := 1
 #Do we panic on bug?  default is to warn
 PANIC_ON_BUG := 0
 
+#Enable this flag to build ftm driver
+BUILD_FTM_DRIVER := 0
+
 ifeq ($(CONFIG_CFG80211),y)
 HAVE_CFG80211 := 1
 else
@@ -14,6 +17,9 @@ else
 HAVE_CFG80211 := 0
 endif
 endif
+
+#EXTRA_CFLAGS += -Wno-unused-variable -Wno-implicit-function-declaration
+
 
 INC_PRE := drivers/staging/prima
 
@@ -466,17 +472,18 @@ CDEFINES  := -DANI_PRODUCT_TYPE_CLIENT=1 \
 		-DFEATURE_WLAN_INTEGRATED_SOC \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DANI_MANF_DIAG \
-		-DWLAN_FEATURE_VOWIFI_11R \
-		-DWLAN_FEATURE_NEIGHBOR_ROAMING \
-		-DWLAN_FEATURE_NEIGHBOR_ROAMING_DEBUG \
-		-DWLAN_FEATURE_VOWIFI_11R_DEBUG \
 		-DFEATURE_WLAN_WAPI \
 		-DFEATURE_OEM_DATA_SUPPORT \
 		-DSOFTAP_CHANNEL_RANGE \
 		-DWLAN_AP_STA_CONCURRENCY \
 		-DFEATURE_WLAN_SCAN_PNO \
 		-DWLAN_FEATURE_PACKET_FILTERING \
-		-DWLAN_FEATURE_VOWIFI
+		-DWLAN_FEATURE_NEIGHBOR_ROAMING \
+		-DWLAN_FEATURE_NEIGHBOR_ROAMING_DEBUG
+
+#		-DWLAN_FEATURE_VOWIFI_11R \
+#		-DWLAN_FEATURE_VOWIFI_11R_DEBUG \
+#		-DWLAN_FEATURE_VOWIFI \
 
 # there are still pieces of code which are conditional upon these
 # need to investigate all of them to see which should also be
@@ -532,6 +539,12 @@ CDEFINES += -DWLAN_OPEN_SOURCE
 
 KBUILD_CPPFLAGS += $(CDEFINES)
 
+ifeq ($(BUILD_FTM_DRIVER),1)
+CDEFINES += -DANI_MANF_DIAG \
+    -UWLAN_FTM_STUB \
+    -DANI_PHY_DEBUG
+MODNAME := $(MODNAME)_ftm
+endif
 
 $(MODNAME)-objs := $(OBJS)
 obj-$(CONFIG_PRIMA_WLAN) += $(MODNAME).o

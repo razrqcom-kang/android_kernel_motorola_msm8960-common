@@ -20,7 +20,6 @@
  */
 
 /*
- *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limProcessAuthFrame.cc contains the code
  * for processing received Authentication Frame.
@@ -192,7 +191,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
 
-    //PELOG3(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG3, (tANI_U8*)pBd, ((tpHalBufDesc) pBd)->mpduDataOffset + frameLen);)
+    PELOG3(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG3, (tANI_U8*)pBd, ((tpHalBufDesc) pBd)->mpduDataOffset + frameLen);)
 
 
    
@@ -717,7 +716,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                      sizeof(tSirMacAddr));
                         mlmAuthInd.authType = (tAniAuthType)
                                               pRxAuthFrameBody->authAlgoNumber;
-                        mlmAuthInd.sessionId = psessionEntry->smeSessionId;
 
                         limPostSmeMessage(pMac,
                                           LIM_MLM_AUTH_IND,
@@ -842,8 +840,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
                             // get random bytes and use as
                             // challenge text
-                            // TODO
-                            //if( !VOS_IS_STATUS_SUCCESS( vos_rand_get_bytes( 0, (tANI_U8 *)challengeTextArray, SIR_MAC_AUTH_CHALLENGE_LENGTH ) ) )
+                            if( !VOS_IS_STATUS_SUCCESS( vos_rand_get_bytes( 0, (tANI_U8 *)challengeTextArray, SIR_MAC_AUTH_CHALLENGE_LENGTH ) ) )
                             {
                                limLog(pMac, LOGE,FL("Challenge text preparation failed in limProcessAuthFrame"));
                             }
@@ -972,24 +969,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                        MAC_ADDR_ARRAY(pHdr->sa));)
 
                 break;
-            }
-
-            if (pRxAuthFrameBody->authStatusCode ==
-                eSIR_MAC_AUTH_ALGO_NOT_SUPPORTED_STATUS)
-            {
-                /**
-                 * Interoperability workaround: Linksys WAP4400N is returning
-                 * wrong authType in OpenAuth response in case of 
-                 * SharedKey AP configuration. Pretend we don't see that,
-                 * so upper layer can fallback to SharedKey authType,
-                 * and successfully connect to the AP.
-                 */
-                if (pRxAuthFrameBody->authAlgoNumber !=
-                    pMac->lim.gpLimMlmAuthReq->authType)
-                {
-                    pRxAuthFrameBody->authAlgoNumber =
-                    pMac->lim.gpLimMlmAuthReq->authType;
-                }
             }
 
             if (pRxAuthFrameBody->authAlgoNumber !=
@@ -1161,7 +1140,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                                     encrAuthFrame,key_length);
 
                                 psessionEntry->limMlmState = eLIM_MLM_WT_AUTH_FRAME4_STATE;
-                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
+                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, 0, pMac->lim.gLimMlmState));
 
                                 limSendAuthMgmtFrame(pMac,
                                                      (tpSirMacAuthFrameBody) encrAuthFrame,
@@ -1242,7 +1221,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
                                 psessionEntry->limMlmState =
                                 eLIM_MLM_WT_AUTH_FRAME4_STATE;
-                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
+                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, 0, pMac->lim.gLimMlmState));
 
                                 limSendAuthMgmtFrame(pMac,
                                                      (tpSirMacAuthFrameBody) encrAuthFrame,
@@ -1445,7 +1424,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                  sizeof(tSirMacAddr));
                     mlmAuthInd.authType = (tAniAuthType)
                                           pRxAuthFrameBody->authAlgoNumber;
-                    mlmAuthInd.sessionId = psessionEntry->smeSessionId;
 
                     limPostSmeMessage(pMac,
                                       LIM_MLM_AUTH_IND,

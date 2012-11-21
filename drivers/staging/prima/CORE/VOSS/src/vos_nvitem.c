@@ -52,9 +52,6 @@
 #define MAX_COUNTRY_COUNT        300
 //To be removed when NV support is fully functional
 #define VOS_HARD_CODED_MAC    {0, 0x0a, 0xf5, 4, 5, 6}
-
-#define DEFAULT_NV_VALIDITY_BITMAP 0xFFFFFFFF
-
 /*----------------------------------------------------------------------------
  * Type Declarations
  * -------------------------------------------------------------------------*/
@@ -466,7 +463,6 @@ VOS_STATUS vos_nv_open(void)
     VOS_STATUS status = VOS_STATUS_SUCCESS;
     v_CONTEXT_t pVosContext= NULL;
     v_SIZE_t bufSize;
-    v_SIZE_t nvReadBufSize;
     v_BOOL_t itemIsValid = VOS_FALSE;
     
     /*Get the global context */
@@ -474,7 +470,7 @@ VOS_STATUS vos_nv_open(void)
     bufSize = sizeof(nvEFSTable_t);
     status = hdd_request_firmware(WLAN_NV_FILE,
                                   ((VosContextType*)(pVosContext))->pHDDContext,
-                                  (v_VOID_t**)&gnvEFSTable, &nvReadBufSize);
+                                  (v_VOID_t**)&gnvEFSTable, &bufSize);
 
     if ( (!VOS_IS_STATUS_SUCCESS( status )) || !gnvEFSTable)
     {
@@ -497,17 +493,8 @@ VOS_STATUS vos_nv_open(void)
 
         /*Copying the NV defaults */
         vos_mem_copy(&(pnvEFSTable->halnv),&nvDefaults,sizeof(sHalNv));
-       
-        if ( nvReadBufSize != bufSize)
-        {
-            pnvEFSTable->nvValidityBitmap = DEFAULT_NV_VALIDITY_BITMAP;
-            VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-                      "!!!WARNING: INVALID NV FILE, DRIVER IS USING DEFAULT CAL VALUES %d %d!!!",
-                      nvReadBufSize, bufSize);
-            return (eHAL_STATUS_SUCCESS);
-        }
+        pnvEFSTable->nvValidityBitmap = gnvEFSTable->nvValidityBitmap;
 
-       pnvEFSTable->nvValidityBitmap = gnvEFSTable->nvValidityBitmap;
         /* Copy the valid fields to the NV Global structure */ 
         if (vos_nv_getValidity(VNV_FIELD_IMAGE, &itemIsValid) == 
            VOS_STATUS_SUCCESS)
@@ -1512,34 +1499,7 @@ VOS_STATUS vos_nv_getChannelListWithPower(tChannelListWithPower *channels20MHz /
 #endif
         *num20MHzChannelsFound = (tANI_U8)count;
     }
-
-    if( channels40MHz && num40MHzChannelsFound )
-    {
-        count = 0;
-#ifdef FEATURE_WLAN_INTEGRATED_SOC
-        //center channels for 2.4 Ghz 40 MHz channels
-        for( i = RF_CHAN_BOND_3; i <= RF_CHAN_BOND_11; i++ )
-        {
-            
-            if( regChannels[i].enabled )
-            {
-                channels40MHz[count].chanId = rfChannels[i].channelNum;
-                channels40MHz[count++].pwr  = regChannels[i].pwrLimit;
-            }
-        }
-        //center channels for 5 Ghz 40 MHz channels
-        for( i = RF_CHAN_BOND_38; i <= RF_CHAN_BOND_163; i++ )
-        {
-            
-            if( regChannels[i].enabled )
-            {
-                channels40MHz[count].chanId = rfChannels[i].channelNum;
-                channels40MHz[count++].pwr  = regChannels[i].pwrLimit;
-            }
-        }
-#endif
-        *num40MHzChannelsFound = (tANI_U8)count;
-    }
+    //TODO: 40 MHz
     return (status);
 }
 
