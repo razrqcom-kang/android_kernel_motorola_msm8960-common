@@ -130,7 +130,7 @@ struct msm_sensor_fn_t {
 	int (*sensor_power_down)
 		(struct msm_sensor_ctrl_t *);
 	int (*sensor_power_up) (struct msm_sensor_ctrl_t *);
-	int32_t (*sensor_match_id) (struct msm_sensor_ctrl_t *);
+	int32_t (*sensor_match_id)(struct msm_sensor_ctrl_t *s_ctrl);
 	int (*sensor_adjust_frame_lines)
 		(struct msm_sensor_ctrl_t *s_ctrl, uint16_t res);
 	int32_t (*sensor_set_gamma) (struct msm_sensor_ctrl_t *, uint8_t);
@@ -181,6 +181,9 @@ struct msm_sensor_ctrl_t {
 	uint8_t sensor_v4l2_subdev_info_size;
 	struct v4l2_subdev_ops *sensor_v4l2_subdev_ops;
 	struct msm_sensor_fn_t *func_tbl;
+	struct regulator **reg_ptr;
+	struct clk *cam_clk;
+	long clk_rate;
 };
 
 void msm_sensor_start_stream(struct msm_sensor_ctrl_t *s_ctrl);

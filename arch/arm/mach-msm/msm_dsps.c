@@ -42,7 +42,8 @@
 #include "timer.h"
 
 #define DRV_NAME	"msm_dsps"
-#define DRV_VERSION	"3.02"
+#define DRV_VERSION	"3.03"
+
 
 #define PPSS_TIMER0_32KHZ_REG	0x1004
 #define PPSS_TIMER0_20MHZ_REG	0x0804
@@ -664,11 +665,11 @@ static void dsps_fatal_handler(struct work_struct *work)
 	if (dsps_state & SMSM_RESET) {
 		pr_err("%s: DSPS fatal error detected. Resetting\n",
 		       __func__);
-		BUG();
+		panic("DSPS fatal error detected.");
 	} else {
 		pr_debug("%s: User-initiated DSPS reset. Resetting\n",
 			 __func__);
-		BUG();
+		panic("User-initiated DSPS reset.");
 	}
 }
 
@@ -692,7 +693,7 @@ static void dsps_smsm_state_cb(void *data, uint32_t old_state,
 		pr_err
 		    ("%s: SMSM_RESET state detected. restarting the DSPS\n",
 		     __func__);
-		BUG();
+		panic("SMSM_RESET state detected.");
 	}
 }
 
