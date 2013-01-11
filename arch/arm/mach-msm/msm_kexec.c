@@ -29,5 +29,6 @@ void arch_kexec(void)
 #endif
 	return;
 }
+EXPORT_SYMBOL(arch_kexec);
 
 MODULE_LICENSE("GPL");
