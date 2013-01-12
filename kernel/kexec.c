@@ -1021,6 +1021,7 @@ SYSCALL_DEFINE4(kexec_load, unsigned long, entry, unsigned long, nr_segments,
 
 		if (flags & KEXEC_PRESERVE_CONTEXT)
 			image->preserve_context = 1;
+
 		result = machine_kexec_prepare(image);
 		if (result)
 			goto out;
@@ -1511,6 +1512,22 @@ static int __init crash_save_vmcoreinfo_init(void)
 module_init(crash_save_vmcoreinfo_init)
 #endif
 
+static void kexec_info(struct kimage *image)
+{
+	int i;
+	printk("kexec information\n");
+	for (i = 0; i < image->nr_segments; i++) {
+	        printk("  segment[%d]: 0x%08x - 0x%08x (0x%08x)\n",
+		       i,
+		       (unsigned int)image->segment[i].mem,
+		       (unsigned int)image->segment[i].mem +
+				     image->segment[i].memsz,
+		       (unsigned int)image->segment[i].memsz);
+	}
+	printk("  start     : 0x%08x\n", (unsigned int)image->start);
+	printk("  atags     : 0x%08x\n", (unsigned int)image->start - KEXEC_ARM_ZIMAGE_OFFSET + KEXEC_ARM_ATAGS_OFFSET);
+}
+
 /*
  * Move into place and start executing a preloaded standalone
  * executable.  If nothing was preloaded return an error.
@@ -1593,19 +1610,23 @@ EXPORT_SYMBOL(kernel_kexec);
 
 
 static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+	int ret;
 	struct kexec_param data;
 
 	switch (cmd) {
 		case KEXEC_IOC_LOAD:
 		{
+			pr_err("kexec: KEXEC_IOC_LOAD\n");
 			if (copy_from_user(&data, (void __user *)arg,
 					   sizeof(struct kexec_param)))
 				return -EFAULT;
-			return sys_kexec_load((unsigned long)data.entry, data.nr_segments, data.segment, data.kexec_flags);
+			ret = sys_kexec_load((unsigned long)data.entry, data.nr_segments, data.segment, data.kexec_flags);
+			if (!ret) kexec_info(kexec_image);
+			return ret;
 		}
 		case KEXEC_IOC_REBOOT:
 		{
-
+			pr_err("kexec: KEXEC_IOC_REBOOT\n");
 			struct kimage *image;
 			image = xchg(&kexec_image, NULL);
 			if (!image)
