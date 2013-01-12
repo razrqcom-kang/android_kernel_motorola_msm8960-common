@@ -43,6 +43,15 @@
 #include <asm/system.h>
 #include <asm/sections.h>
 
+#include <linux/device.h>
+#include <linux/miscdevice.h>
+#include "kexec-dev.h"
+
+#define DRV_NAME	"kexecd"
+#define DRV_VERSION	"1.0"
+#define DRV_DESCRIPTION	"KEXEC device driver"
+
+
 /* Per cpu memory for storing cpu states in case of system crash. */
 note_buf_t __percpu *crash_notes;
 
@@ -1582,55 +1591,86 @@ int kernel_kexec(void)
 }
 EXPORT_SYMBOL(kernel_kexec);
 
-/**
- *	kernel_kexec - reboot the system
- *
- *	Move into place and start executing a preloaded standalone
- *	executable.  If nothing was preloaded return an error.
- */
-asmlinkage long sys_do_kexec(int magic1, int magic2, unsigned int cmd,
-			     void __user *arg)
-{
-	struct kimage *image;
-	image = xchg(&kexec_image, NULL);
-	if (!image)
-		return -1;
 
-	/* Disable preemption */
-	preempt_disable();
+static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+	struct kexec_param data;
 
-	/* Disable interrupts first */
-	local_irq_disable();
-	local_fiq_disable();
+	switch (cmd) {
+		case KEXEC_IOC_LOAD:
+		{
+			if (copy_from_user(&data, (void __user *)arg,
+					   sizeof(struct kexec_param)))
+				return -EFAULT;
+			return sys_kexec_load((unsigned long)data.entry, data.nr_segments, data.segment, data.kexec_flags);
+		}
+		case KEXEC_IOC_REBOOT:
+		{
 
-	kernel_restart_prepare_ptr(NULL);
-	machine_shutdown();
-	machine_kexec(image);
+			struct kimage *image;
+			image = xchg(&kexec_image, NULL);
+			if (!image)
+				return -1;
 
-	return -1;
+			/* Disable preemption */
+			preempt_disable();
+
+			/* Disable interrupts first */
+			local_irq_disable();
+			local_fiq_disable();
+
+			kernel_restart_prepare_ptr(NULL);
+			machine_shutdown();
+			machine_kexec(image);
+
+			return -1;
+
+		}
+		default:
+			return -ENOTTY;
+	}
+	return 0;
 }
+
+static const struct file_operations kexec_fops = {
+	.owner          = THIS_MODULE,
+	.unlocked_ioctl = kexec_ioctl,
+};
+
+static struct miscdevice kexec_miscdev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "kexec",
+	.fops = &kexec_fops,
+	.parent = NULL,
+	.nodename = "kexec",
+};
 
 static int __init kexec_init(void)
 {
-	unsigned long *sys_call_table_ptr = (void *)kallsyms_lookup_name("sys_call_table");
+	int ret;
+	/*
+	* We really shouldn't be screwing around with the syscall table.
+	* Instead use /dev/kexec with 2 IOCTL
+	* IOCTL_LOAD(info.entry, info.nr_segments, info.segment, info.kexec_flags)
+	* IOCTL_REBOOT(void)
+	*/
 
-	kernel_restart_prepare_ptr = (void *)kallsyms_lookup_name("kernel_restart_prepare");
-
-	if (!sys_call_table_ptr || !kernel_restart_prepare_ptr) {
-		return -1;
+	pr_info("%s, %s\n", DRV_DESCRIPTION, DRV_VERSION);
+	ret = misc_register(&kexec_miscdev);
+	if (ret) {
+		pr_err("kexec: failed to register misc device.\n");
 	}
-
-	sys_call_table_ptr[__NR_kexec_load] = (unsigned long)sys_kexec_load;
-	sys_call_table_ptr[__NR_reboot] = (unsigned long)sys_do_kexec;
-
-	return 0;
+	return ret;
 }
 
 static void __exit kexec_exit(void)
 {
+	misc_deregister(&kexec_miscdev);
 }
 
 module_init(kexec_init)
 module_exit(kexec_exit);
 
+MODULE_DESCRIPTION(DRV_DESCRIPTION);
 MODULE_LICENSE("GPL");
+MODULE_ALIAS_MISCDEV(KEXEC_MINOR);
+MODULE_ALIAS("devname:kexec");
