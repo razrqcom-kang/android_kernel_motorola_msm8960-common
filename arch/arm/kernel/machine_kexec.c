@@ -28,7 +28,6 @@ extern unsigned long kexec_mach_type;
 extern unsigned long kexec_boot_atags;
 
 void kexec_cpu_v7_proc_fin(void);
-void kexec_cpu_v7_reset(void);
 
 /* Using cleaned up kexec code from 3.4 kernel here:
  * [arch/arm/kernel/ process.c]
@@ -48,11 +47,11 @@ typedef void (*phys_reset_t)(unsigned long);
  * should really do as little as possible before jumping to your reset
  * code.
  */
-static u64 soft_restart_stack[16];
+static u64 soft_restart_stack[256];
 
 static void __soft_restart(void *addr)
 {
-	phys_reset_t phys_reset;
+	phys_reset_t phys_reset = (phys_reset_t)addr;
 
 	/* Take out a flat memory mapping. */
 	// Add the unused "mode" for 3.0 kernel
@@ -61,6 +60,9 @@ static void __soft_restart(void *addr)
 	/* Clean and invalidate caches */
 	flush_cache_all();
 
+	outer_flush_all();
+	outer_disable();
+
 	/* Turn off caching */
 	kexec_cpu_v7_proc_fin();
 
@@ -68,8 +70,9 @@ static void __soft_restart(void *addr)
 	flush_cache_all();
 
 	/* Switch to the identity mapping. */
-	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(kexec_cpu_v7_reset);
-	phys_reset((unsigned long)addr);
+//	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(kexec_cpu_v7_reset);
+//	phys_reset((unsigned long)addr);
+	phys_reset(0);
 
 	/* Should never get here. */
 	BUG();
@@ -88,6 +91,8 @@ void soft_restart(unsigned long addr)
 	if (num_online_cpus() == 1)
 		outer_disable();
 
+	printk(KERN_EMERG "Bye\n");
+
 	/* Change to the new stack and continue with the reset. */
 	call_with_stack(__soft_restart, (void *)addr, (void *)stack);
 
@@ -95,7 +100,7 @@ void soft_restart(unsigned long addr)
 	BUG();
 }
 
-static atomic_t waiting_for_crash_ipi;
+// static atomic_t waiting_for_crash_ipi;
 
 /*
  * Provide a dummy crash_notes definition while crash dump arrives to arm.
@@ -178,6 +183,9 @@ void machine_kexec(struct kimage *image)
 	    page_to_pfn(image->control_code_page) << PAGE_SHIFT;
 	reboot_code_buffer = page_address(image->control_code_page);
 
+	printk(KERN_EMERG "va: %08x\n", (int)reboot_code_buffer);
+	printk(KERN_EMERG "pa: %08x\n", (int)reboot_code_buffer_phys);
+
 	/* Prepare parameters for reboot_code_buffer*/
 	kexec_start_address = image->start;
 	kexec_indirection_page = page_list;
@@ -191,7 +199,6 @@ void machine_kexec(struct kimage *image)
 
 	flush_icache_range((unsigned long) reboot_code_buffer,
 			   (unsigned long) reboot_code_buffer + KEXEC_CONTROL_PAGE_SIZE);
-	printk(KERN_INFO "Bye!\n");
 
 	if (kexec_reinit)
 		kexec_reinit();

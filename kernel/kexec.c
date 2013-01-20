@@ -1536,6 +1536,7 @@ int kernel_kexec(void)
 {
 	int error = 0;
 
+	printk("kernel_kexec: BEGIN\n");
 	if (!mutex_trylock(&kexec_mutex))
 		return -EBUSY;
 	if (!kexec_image) {
@@ -1611,27 +1612,32 @@ EXPORT_SYMBOL(kernel_kexec);
 
 static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	int ret;
-	struct kexec_param data;
+	struct kexec_param *data;
+	struct kimage *image;
 
 	switch (cmd) {
 		case KEXEC_IOC_LOAD:
 		{
 			pr_err("kexec: KEXEC_IOC_LOAD\n");
-			if (copy_from_user(&data, (void __user *)arg,
-					   sizeof(struct kexec_param)))
-				return -EFAULT;
-			ret = sys_kexec_load((unsigned long)data.entry, data.nr_segments, data.segment, data.kexec_flags);
+			data = (struct kexec_param *)arg;
+//			if (copy_from_user(&data, (void __user *)arg,
+//					   sizeof(struct kexec_param)))
+//				return -EFAULT;
+			ret = sys_kexec_load((unsigned long)data->entry,
+					data->nr_segments,
+					data->segment,
+					data->kexec_flags);
 			if (!ret) kexec_info(kexec_image);
 			return ret;
 		}
 		case KEXEC_IOC_REBOOT:
 		{
 			pr_err("kexec: KEXEC_IOC_REBOOT\n");
-			struct kimage *image;
 			image = xchg(&kexec_image, NULL);
 			if (!image)
 				return -1;
 
+			kernel_restart_prepare_ptr(NULL);
 			/* Disable preemption */
 			preempt_disable();
 
@@ -1639,8 +1645,9 @@ static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) 
 			local_irq_disable();
 			local_fiq_disable();
 
-			kernel_restart_prepare_ptr(NULL);
+			printk(KERN_EMERG "Machine shutdown\n");
 			machine_shutdown();
+			printk(KERN_EMERG "Machine kexec\n");
 			machine_kexec(image);
 
 			return -1;
@@ -1680,6 +1687,13 @@ static int __init kexec_init(void)
 	if (ret) {
 		pr_err("kexec: failed to register misc device.\n");
 	}
+
+	kernel_restart_prepare_ptr = (void *)kallsyms_lookup_name("kernel_restart_prepare");
+
+	if (!kernel_restart_prepare_ptr) {
+		return -1;
+	}
+
 	return ret;
 }
 

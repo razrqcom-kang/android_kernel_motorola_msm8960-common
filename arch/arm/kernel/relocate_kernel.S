@@ -14,32 +14,19 @@ ENTRY(kexec_cpu_v7_proc_fin)
 	mov	pc, lr
 ENDPROC(kexec_cpu_v7_proc_fin)
 
-/*
- *	cpu_v7_reset(loc)
- *
- *	Perform a soft reset of the system.  Put the CPU into the
- *	same state as it would be if it had been reset, and branch
- *	to what would be the reset vector.
- *
- *	- loc   - location to jump to for soft reset
- *
- *	This code must be executed using a flat identity mapping with
- *      caches disabled.
- */
-	.align	5
-ENTRY(kexec_cpu_v7_reset)
+	.align 8
+	.balign 32
+	.globl relocate_new_kernel
+relocate_new_kernel:
+	@ reset
 	mrc     p15, 0, r1, c1, c0, 0           @ ctrl register
 	bic     r1, r1, #0x0001                 @ ...............m
         mcr     p15, 0, r1, c1, c0, 0           @ Turn off MMU
         mcr     p15, 0, ip, c8, c7, 0           @ invalidate I & D,flush TLB
         mcr     p15, 0, ip, c7, c5, 6           @ flush BTC
-        dsb
-        isb
 	mov     pc,r0
-ENDPROC(kexec_cpu_v7_reset)
-
-	.globl relocate_new_kernel
-relocate_new_kernel:
+	dsb
+	isb
 
 	ldr	r0,kexec_indirection_page
 	ldr	r1,kexec_start_address
@@ -48,8 +35,8 @@ relocate_new_kernel:
 	 * If there is no indirection page (we are doing crashdumps)
 	 * skip any relocation.
 	 */
-	cmp	r0, #0
-	beq	2f
+//	cmp	r0, #0
+//	beq	2f
 
 0:	/* top, read another word for the indirection page */
 	ldr	r3, [r0],#4
