@@ -21,6 +21,8 @@ extern const unsigned int relocate_new_kernel_size;
 
 //extern void setup_mm_for_reboot(char mode);
 static void (*kexec_setup_mm_for_reboot)(char mode);
+void (*kexec_gic_raise_softirq)(const struct cpumask *mask, unsigned int irq);
+int (*kexec_msm_pm_wait_cpu_shutdown)(unsigned int cpu);
 
 extern unsigned long kexec_start_address;
 extern unsigned long kexec_indirection_page;
@@ -88,6 +90,7 @@ void soft_restart(unsigned long addr)
 	local_fiq_disable();
 
 	/* Disable the L2 if we're the last man standing. */
+	printk(KERN_EMERG "soft_restart: num_online_cpus == %d\n", num_online_cpus());
 	if (num_online_cpus() == 1)
 		outer_disable();
 
@@ -118,8 +121,70 @@ void machine_kexec_cleanup(struct kimage *image)
 }
 EXPORT_SYMBOL(machine_kexec_cleanup);
 
+enum ipi_msg_type {
+	IPI_CPU_START = 1,
+	IPI_TIMER = 2,
+	IPI_RESCHEDULE,
+	IPI_CALL_FUNC,
+	IPI_CALL_FUNC_SINGLE,
+	IPI_CPU_STOP,
+	IPI_CPU_BACKTRACE,
+};
+
+static void kexec_smp_kill_cpus(cpumask_t *mask)
+{
+	unsigned int cpu;
+	for_each_cpu(cpu, mask) {
+		kexec_msm_pm_wait_cpu_shutdown(cpu);
+	}
+}
+
 void machine_shutdown(void)
 {
+	unsigned long timeout;
+	struct cpumask mask;
+
+	kexec_gic_raise_softirq = (void *)kallsyms_lookup_name("gic_raise_softirq");
+	kexec_msm_pm_wait_cpu_shutdown = (void *)kallsyms_lookup_name("msm_pm_wait_cpu_shutdown");
+	if (!kexec_msm_pm_wait_cpu_shutdown) {
+		printk(KERN_EMERG "msm_pm_wait_cpu_shutdown NOT FOUND!\n");
+		return;
+	}
+
+	if (kexec_gic_raise_softirq) {
+		printk(KERN_EMERG "found gic_raise_softirq: %p\n", kexec_gic_raise_softirq);
+
+		cpumask_copy(&mask, cpu_online_mask);
+		cpumask_clear_cpu(smp_processor_id(), &mask);
+		if (!cpumask_empty(&mask)) {
+			printk(KERN_EMERG "Sending STOP to extra CPUs ...\n");
+			kexec_gic_raise_softirq(&mask, IPI_CPU_STOP);
+		}
+
+		/* Wait up to five seconds for other CPUs to stop */
+		timeout = USEC_PER_SEC;
+		printk(KERN_EMERG "waiting for CPUs ...(%lu)\n", timeout);
+		while (num_online_cpus() > 1 && timeout--)
+			udelay(1);
+
+		if (num_online_cpus() > 1)
+			pr_warning("SMP: failed to stop secondary CPUs\n");
+
+		kexec_smp_kill_cpus(&mask);
+	}
+	else {
+		pr_warning("SMP: failed to stop secondary CPUs\n");
+	}
+
+#if 0
+	void (*kexec_smp_send_stop)(void);
+	kexec_smp_send_stop = (void *)kallsyms_lookup_name("smp_send_stop");
+	if (!kexec_smp_send_stop) {
+		printk(KERN_EMERG "kexec_smp_send_stop NOT FOUND!\n");
+		return;
+	}
+	kexec_smp_send_stop();
+#endif
 }
 EXPORT_SYMBOL(machine_shutdown);
 
@@ -191,6 +256,11 @@ void machine_kexec(struct kimage *image)
 	kexec_indirection_page = page_list;
 	kexec_mach_type = machine_arch_type;
 	kexec_boot_atags = image->start - KEXEC_ARM_ZIMAGE_OFFSET + KEXEC_ARM_ATAGS_OFFSET;
+
+	printk(KERN_EMERG "kexec_start_address: %08lx\n", kexec_start_address);
+	printk(KERN_EMERG "kexec_indirection_page: %08lx\n", kexec_indirection_page);
+	printk(KERN_EMERG "kexec_mach_type: %08lx\n", kexec_mach_type);
+	printk(KERN_EMERG "kexec_boot_atags: %08lx\n", kexec_boot_atags);
 
 	/* copy our kernel relocation code to the control code page */
 	memcpy(reboot_code_buffer,
