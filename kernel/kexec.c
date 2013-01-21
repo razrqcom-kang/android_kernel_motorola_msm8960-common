@@ -1516,16 +1516,20 @@ static void kexec_info(struct kimage *image)
 {
 	int i;
 	printk("kexec information\n");
-	for (i = 0; i < image->nr_segments; i++) {
-	        printk("  segment[%d]: 0x%08x - 0x%08x (0x%08x)\n",
-		       i,
-		       (unsigned int)image->segment[i].mem,
-		       (unsigned int)image->segment[i].mem +
-				     image->segment[i].memsz,
-		       (unsigned int)image->segment[i].memsz);
+	if (image) {
+		for (i = 0; i < image->nr_segments; i++) {
+			printk("  segment[%d]: 0x%08x - 0x%08x (0x%08x)\n",
+			       i,
+			       (unsigned int)image->segment[i].mem,
+			       (unsigned int)image->segment[i].mem +
+					     image->segment[i].memsz,
+			       (unsigned int)image->segment[i].memsz);
+		}
+		printk("  start     : 0x%08x\n", (unsigned int)image->start);
+		printk("  atags     : 0x%08x\n", (unsigned int)image->start - KEXEC_ARM_ZIMAGE_OFFSET + KEXEC_ARM_ATAGS_OFFSET);
 	}
-	printk("  start     : 0x%08x\n", (unsigned int)image->start);
-	printk("  atags     : 0x%08x\n", (unsigned int)image->start - KEXEC_ARM_ZIMAGE_OFFSET + KEXEC_ARM_ATAGS_OFFSET);
+	else
+		printk("no kernel image loaded\n");
 }
 
 /*
@@ -1578,10 +1582,10 @@ int kernel_kexec(void)
 #endif
 	{
 		kernel_restart_prepare_ptr(NULL);
-		printk(KERN_EMERG "Starting new kernel\n");
+		printk(KERN_EMERG "Machine shutdown\n");
 		machine_shutdown();
 	}
-
+	printk(KERN_EMERG "Machine kexec\n");
 	machine_kexec(kexec_image);
 
 #ifdef CONFIG_KEXEC_JUMP
@@ -1613,7 +1617,6 @@ EXPORT_SYMBOL(kernel_kexec);
 static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	int ret;
 	struct kexec_param *data;
-	struct kimage *image;
 
 	switch (cmd) {
 		case KEXEC_IOC_LOAD:
@@ -1630,28 +1633,23 @@ static long kexec_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) 
 			if (!ret) kexec_info(kexec_image);
 			return ret;
 		}
+		case KEXEC_IOC_CHECK_LOADED:
+		{
+			pr_err("kexec: KEXEC_IOC_CHECK_LOADED (%d)\n", !!kexec_image);
+			return !!kexec_image;
+		}
 		case KEXEC_IOC_REBOOT:
 		{
 			pr_err("kexec: KEXEC_IOC_REBOOT\n");
-			image = xchg(&kexec_image, NULL);
-			if (!image)
-				return -1;
 
-			kernel_restart_prepare_ptr(NULL);
-			/* Disable preemption */
 			preempt_disable();
 
 			/* Disable interrupts first */
 			local_irq_disable();
 			local_fiq_disable();
 
-			printk(KERN_EMERG "Machine shutdown\n");
-			machine_shutdown();
-			printk(KERN_EMERG "Machine kexec\n");
-			machine_kexec(image);
-
-			return -1;
-
+//			smp_call_function_single(0, (smp_call_func_t)kernel_kexec, NULL, 1);
+			kernel_kexec();
 		}
 		default:
 			return -ENOTTY;
