@@ -16,5 +16,6 @@ struct kexec_param {
 
 #define KEXEC_IOC_LOAD		_IOW(KEXEC_IOC_MAGIC, 0, struct kexec_param)
 #define KEXEC_IOC_REBOOT	_IOW(KEXEC_IOC_MAGIC, 1, int)
+#define KEXEC_IOC_CHECK_LOADED	_IOR(KEXEC_IOC_MAGIC, 2, int)
 
 #endif /* __KEXEC_DEV_H */
