@@ -6,6 +6,36 @@
 #include <linux/linkage.h>
 #include <asm/assembler.h>
 
+ENTRY(kexec_redo)
+	movw	r3, #:lower16:0x00000000
+	movt	r3, #:upper16:0x00000000
+	movw	r4, #:lower16:0x00000001
+	movt	r4, #:upper16:0x00000001
+	str	r4, [r3]
+ENDPROC(kexec_redo)
+
+/*
+ * void call_with_stack(void (*fn)(void *), void *arg, void *sp)
+ *
+ * Change the stack to that pointed at by sp, then invoke fn(arg) with
+ * the new stack.
+ */
+ENTRY(kexec_call_with_stack)
+	str	sp, [r2, #-4]!
+	str	lr, [r2, #-4]!
+
+	mov	sp, r2
+	mov	r2, r0
+	mov	r0, r1
+
+	adr	lr, BSYM(1f)
+	mov	pc, r2
+
+1:	ldr	lr, [sp]
+	ldr	sp, [sp, #4]
+	mov	pc, lr
+ENDPROC(kexec_call_with_stack)
+
 ENTRY(kexec_cpu_v7_proc_fin)
 	mrc	p15, 0, r0, c1, c0, 0		@ ctrl register
 	bic	r0, r0, #0x1000			@ ...i............
@@ -14,20 +44,34 @@ ENTRY(kexec_cpu_v7_proc_fin)
 	mov	pc, lr
 ENDPROC(kexec_cpu_v7_proc_fin)
 
-	.align 8
-	.balign 32
-	.globl relocate_new_kernel
-relocate_new_kernel:
-	@ reset
+//	.align	5
+ENTRY(kexec_cpu_v7_reset)
 	mrc     p15, 0, r1, c1, c0, 0           @ ctrl register
 	bic     r1, r1, #0x0001                 @ ...............m
         mcr     p15, 0, r1, c1, c0, 0           @ Turn off MMU
         mcr     p15, 0, ip, c8, c7, 0           @ invalidate I & D,flush TLB
         mcr     p15, 0, ip, c7, c5, 6           @ flush BTC
+        dsb
+        isb
 	mov     pc,r0
-	dsb
-	isb
+ENDPROC(kexec_cpu_v7_reset)
 
+	.align 8
+	.balign 32
+	.globl relocate_new_kernel
+relocate_new_kernel:
+//	@ reset
+//	mrc     p15, 0, r1, c1, c0, 0           @ ctrl register
+//	bic     r1, r1, #0x0001                 @ ...............m
+//	mcr     p15, 0, r1, c1, c0, 0           @ Turn off MMU
+//	dsb
+//	isb
+//	mcr     p15, 0, ip, c8, c7, 0           @ invalidate I & D,flush TLB
+//	mcr     p15, 0, ip, c7, c5, 6           @ flush BTC
+//	mov     pc,r0
+//	dsb
+//	isb
+//
 	ldr	r0,kexec_indirection_page
 	ldr	r1,kexec_start_address
 

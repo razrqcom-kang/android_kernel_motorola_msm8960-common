@@ -15,12 +15,12 @@
 #include <asm/mmu_context.h>
 #include <asm/cacheflush.h>
 #include <asm/mach-types.h>
+#include <asm/outercache.h>
+
 
 extern const unsigned char relocate_new_kernel[];
 extern const unsigned int relocate_new_kernel_size;
 
-//extern void setup_mm_for_reboot(char mode);
-static void (*kexec_setup_mm_for_reboot)(char mode);
 void (*kexec_gic_raise_softirq)(const struct cpumask *mask, unsigned int irq);
 int (*kexec_msm_pm_wait_cpu_shutdown)(unsigned int cpu);
 
@@ -30,6 +30,8 @@ extern unsigned long kexec_mach_type;
 extern unsigned long kexec_boot_atags;
 
 void kexec_cpu_v7_proc_fin(void);
+void kexec_cpu_v7_reset(unsigned long loc);
+void kexec_redo(void);
 
 /* Using cleaned up kexec code from 3.4 kernel here:
  * [arch/arm/kernel/ process.c]
@@ -39,7 +41,7 @@ void kexec_cpu_v7_proc_fin(void);
  * http://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=blob;f=arch/arm/kernel/machine_kexec.c;h=dfcdb9f7c1261143f93c31846ed372269a4b4783;hb=0ba1cd8da86b7c4717852e786bacc7154b62d95c
  */
 
-extern void call_with_stack(void (*fn)(void *), void *arg, void *sp);
+extern void kexec_call_with_stack(void (*fn)(void *), void *arg, void *sp);
 typedef void (*phys_reset_t)(unsigned long);
 
 /*
@@ -51,22 +53,92 @@ typedef void (*phys_reset_t)(unsigned long);
  */
 static u64 soft_restart_stack[256];
 
+
+static void kexec_idmap_add_pmd(pud_t *pud, unsigned long addr, unsigned long end,
+	unsigned long prot)
+{
+	pmd_t *pmd = pmd_offset(pud, addr);
+
+	addr = (addr & PMD_MASK) | prot;
+	pmd[0] = __pmd(addr);
+	addr += SECTION_SIZE;
+	pmd[1] = __pmd(addr);
+	flush_pmd_entry(pmd);
+}
+
+static void kexec_idmap_add_pud(pgd_t *pgd, unsigned long addr, unsigned long end,
+	unsigned long prot)
+{
+	pud_t *pud = pud_offset(pgd, addr);
+	unsigned long next;
+
+	do {
+		next = pud_addr_end(addr, end);
+		kexec_idmap_add_pmd(pud, addr, next, prot);
+	} while (pud++, addr = next, addr != end);
+}
+
+void kexec_identity_mapping_add(pgd_t *pgd, unsigned long addr, unsigned long end)
+{
+	unsigned long prot, next;
+
+	prot = PMD_TYPE_SECT | PMD_SECT_AP_WRITE;
+//	if (cpu_architecture() <= CPU_ARCH_ARMv5TEJ && !cpu_is_xscale())
+//		prot |= PMD_BIT4;
+
+	pgd += pgd_index(addr);
+	do {
+//		printk(KERN_EMERG "mapping: 0x%08x\n", addr);
+		next = pgd_addr_end(addr, end);
+		kexec_idmap_add_pud(pgd, addr, next, prot);
+		local_flush_tlb_all();
+	} while (pgd++, addr = next, addr != end);
+	printk(KERN_EMERG "end mappings end==0x%08x: 0x%08x\n", end, addr);
+}
+
+/*
+ * In order to soft-boot, we need to insert a 1:1 mapping in place of
+ * the user-mode pages.  This will then ensure that we have predictable
+ * results when turning the mmu off
+ */
+void identity_map(unsigned long phys_addr)
+{
+	pgd_t *pgd;
+	pmd_t *pmd;
+
+	int prot = PMD_SECT_AP_WRITE | PMD_SECT_AP_READ | PMD_TYPE_SECT;
+	unsigned long phys = phys_addr & PMD_MASK;
+
+//	if (cpu_architecture() <= CPU_ARCH_ARMv5TEJ && !cpu_is_xscale())
+//		prot |= PMD_BIT4;
+
+	/*
+	 * We need to access to user-mode page tables here. For kernel threads
+	 * we don't have any user-mode mappings so we use the context that we
+	 * "borrowed".
+	 */
+
+	pgd = pgd_offset(current->active_mm, phys);
+	pmd = pmd_offset(pgd, phys);
+	pmd[0] = __pmd(phys | prot);
+	pmd[1] = __pmd((phys + (1 << (PGDIR_SHIFT - 1))) | prot);
+
+	flush_pmd_entry(pmd);
+
+	local_flush_tlb_all();
+}
+
 static void __soft_restart(void *addr)
 {
 	phys_reset_t phys_reset = (phys_reset_t)addr;
 
-	/* Take out a flat memory mapping. */
-	// Add the unused "mode" for 3.0 kernel
-	kexec_setup_mm_for_reboot(0);
-
 	/* Clean and invalidate caches */
 	flush_cache_all();
 
-	outer_flush_all();
-	outer_disable();
-
 	/* Turn off caching */
 	kexec_cpu_v7_proc_fin();
+
+	local_flush_tlb_all();
 
 	/* Push out any further dirty data, and ensure cache is empty */
 	flush_cache_all();
@@ -82,25 +154,6 @@ static void __soft_restart(void *addr)
 
 void soft_restart(unsigned long addr)
 {
-	u64 *stack = soft_restart_stack + ARRAY_SIZE(soft_restart_stack);
-	kexec_setup_mm_for_reboot = (void *)kallsyms_lookup_name("setup_mm_for_reboot");
-
-	/* Disable interrupts first */
-	local_irq_disable();
-	local_fiq_disable();
-
-	/* Disable the L2 if we're the last man standing. */
-	printk(KERN_EMERG "soft_restart: num_online_cpus == %d\n", num_online_cpus());
-	if (num_online_cpus() == 1)
-		outer_disable();
-
-	printk(KERN_EMERG "Bye\n");
-
-	/* Change to the new stack and continue with the reset. */
-	call_with_stack(__soft_restart, (void *)addr, (void *)stack);
-
-	/* Should never get here. */
-	BUG();
 }
 
 // static atomic_t waiting_for_crash_ipi;
@@ -175,16 +228,6 @@ void machine_shutdown(void)
 	else {
 		pr_warning("SMP: failed to stop secondary CPUs\n");
 	}
-
-#if 0
-	void (*kexec_smp_send_stop)(void);
-	kexec_smp_send_stop = (void *)kallsyms_lookup_name("smp_send_stop");
-	if (!kexec_smp_send_stop) {
-		printk(KERN_EMERG "kexec_smp_send_stop NOT FOUND!\n");
-		return;
-	}
-	kexec_smp_send_stop();
-#endif
 }
 EXPORT_SYMBOL(machine_shutdown);
 
@@ -228,16 +271,13 @@ void machine_crash_shutdown(struct pt_regs *regs)
 #endif
 }
 
-/*
- * Function pointer to optional machine-specific reinitialization
- */
-void (*kexec_reinit)(void);
-
 void machine_kexec(struct kimage *image)
 {
 	unsigned long page_list;
 	unsigned long reboot_code_buffer_phys;
 	void *reboot_code_buffer;
+	phys_reset_t phys_reset;
+	u64 *stack = soft_restart_stack + ARRAY_SIZE(soft_restart_stack);
 
 	arch_kexec();
 
@@ -262,30 +302,101 @@ void machine_kexec(struct kimage *image)
 	printk(KERN_EMERG "kexec_mach_type: %08lx\n", kexec_mach_type);
 	printk(KERN_EMERG "kexec_boot_atags: %08lx\n", kexec_boot_atags);
 
+	identity_map(reboot_code_buffer_phys);
+
 	/* copy our kernel relocation code to the control code page */
 	memcpy(reboot_code_buffer,
 	       relocate_new_kernel, relocate_new_kernel_size);
+	printk(KERN_EMERG "copy relocate code: addr=0x%08x, len==%d\n", reboot_code_buffer, relocate_new_kernel_size);
 
 
+//	cpu_cache.flush_icache_all();
 	flush_icache_range((unsigned long) reboot_code_buffer,
-			   (unsigned long) reboot_code_buffer + KEXEC_CONTROL_PAGE_SIZE);
+			   (unsigned long) reboot_code_buffer + (4096));
 
-	if (kexec_reinit)
-		kexec_reinit();
-	soft_restart(reboot_code_buffer_phys);
-#if 0
+	/* Disable preemption */
+	preempt_disable();
+
+	printk(KERN_EMERG "Disable IRQ's\n");
 	local_irq_disable();
 	local_fiq_disable();
-	setup_mm_for_reboot(0); /* mode is not used, so just pass 0*/
+
+	printk(KERN_EMERG "setup_mm_for_reboot...\n");
+	/*
+	 * We need to access to user-mode page tables here. For kernel threads
+	 * we don't have any user-mode mappings so we use the context that we
+	 * "borrowed".
+	 */
+//	setup_mm_for_reboot(0); /* mode is not used, so just pass 0*/
+	kexec_identity_mapping_add(current->active_mm->pgd, 0, TASK_SIZE);
+	local_flush_tlb_all();
+
+	flush_cache_all();
+
+	printk(KERN_EMERG "soft_restart: num_online_cpus == %d\n", num_online_cpus());
+	outer_flush_all();
+	outer_disable();
+
+	printk(KERN_EMERG "cpu_v7_proc_fin\n");
+	/* Turn off caching */
+	kexec_cpu_v7_proc_fin();
+
+	printk(KERN_EMERG "outer_flush_all\n");
+	outer_flush_all();
+	printk(KERN_EMERG "outer_inv_all\n");
+	outer_inv_all();
+
+//	printk(KERN_EMERG "flush_cache_all\n");
+//	flush_cache_all();
+
+//	printk(KERN_EMERG "jumping the shark\n");
+	/* Change to the new stack and continue with the reset. */
+//	kexec_call_with_stack(__soft_restart, (void *)reboot_code_buffer_phys, (void *)stack);
+
+//	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(kexec_cpu_v7_reset);
+//	phys_reset(reboot_code_buffer_phys);
+	kexec_cpu_v7_reset(reboot_code_buffer_phys);
+
+	printk(KERN_EMERG "*** SHOULDN'T GET HERE ***\n");
+//	BUG();
+
+#if 0
 	flush_cache_all();
 	outer_flush_all();
 	outer_disable();
 	cpu_proc_fin();
 	outer_inv_all();
 	flush_cache_all();
-	__virt_to_phys(cpu_reset)(reboot_code_buffer_phys);
+	//__virt_to_phys(kexec_cpu_v7_reset)(reboot_code_buffer_phys);
+	kexec_cpu_v7_reset(reboot_code_buffer_phys);
 #endif
 }
 EXPORT_SYMBOL(machine_kexec);
+
+static int __init arm_kexec_init(void)
+{
+	void (*set_cpu_online_ptr)(unsigned int cpu, bool online) = (void *)kallsyms_lookup_name("set_cpu_online");
+	void (*set_cpu_present_ptr)(unsigned int cpu, bool present) = (void *)kallsyms_lookup_name("set_cpu_present");
+	void (*set_cpu_possible_ptr)(unsigned int cpu, bool possible) = (void *)kallsyms_lookup_name("set_cpu_possible");
+	int (*disable_nonboot_cpus)(void) = (void *)kallsyms_lookup_name("disable_nonboot_cpus");
+	int nbcval = 0;
+	nbcval = disable_nonboot_cpus();
+	if (nbcval < 0)
+		printk(KERN_INFO "!!!WARNING!!! disable_nonboot_cpus have FAILED!\n \
+				  Continuing to boot anyway: something can go wrong!\n");
+
+	set_cpu_online_ptr(1, false);
+	set_cpu_present_ptr(1, false);
+	set_cpu_possible_ptr(1, false);
+
+	return 0;
+}
+
+static void __exit arm_kexec_exit(void)
+{
+}
+
+module_init(arm_kexec_init);
+module_exit(arm_kexec_exit);
 
 MODULE_LICENSE("GPL");
