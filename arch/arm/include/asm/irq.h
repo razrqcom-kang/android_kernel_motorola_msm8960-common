@@ -1,6 +1,8 @@
 #ifndef __ASM_ARM_IRQ_H
 #define __ASM_ARM_IRQ_H
 
+#define ARCH_HAS_NMI_WATCHDOG
+
 #define NR_IRQS_LEGACY	16
 
 #ifndef CONFIG_SPARSE_IRQ

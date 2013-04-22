@@ -110,6 +110,9 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 "2:\n"
 "	strexeq	%[tmp], %[bit0], [%[lock]]\n"
 "	teqeq	%[tmp], #0\n"
+#if __LINUX_ARM_ARCH__ >= 7
+"	dmb\n"
+#endif
 "	bne	1b"
 	: [tmp] "=&r" (tmp), [fixup] "+r" (fixup)
 	: [lock] "r" (&lock->lock), [bit0] "r" (1)
@@ -304,6 +307,9 @@ static inline void arch_write_lock(arch_rwlock_t *rw)
 "2:\n"
 "	strexeq	%[tmp], %[bit31], [%[lock]]\n"
 "	teq	%[tmp], #0\n"
+#if __LINUX_ARM_ARCH__ >= 7
+"	dmb\n"
+#endif
 "	bne	1b"
 	: [tmp] "=&r" (tmp), [fixup] "+r" (fixup)
 	: [lock] "r" (&rw->lock), [bit31] "r" (0x80000000)
@@ -372,6 +378,9 @@ static inline void arch_read_lock(arch_rwlock_t *rw)
 	WFE_SAFE("%[fixup]", "%[tmp]")
 "2:\n"
 "	rsbpls	%[tmp], %[tmp2], #0\n"
+#if __LINUX_ARM_ARCH__ >= 7
+"	dmb\n"
+#endif
 "	bmi	1b"
 	: [tmp] "=&r" (tmp), [tmp2] "=&r" (tmp2), [fixup] "+r" (fixup)
 	: [lock] "r" (&rw->lock)
