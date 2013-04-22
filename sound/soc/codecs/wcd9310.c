@@ -36,6 +36,7 @@
 #include <linux/irq.h>
 #include <linux/wakelock.h>
 #include <linux/suspend.h>
+#include <linux/emu-accy.h>
 #include "wcd9310.h"
 
 static int cfilt_adjust_ms = 10;
@@ -135,6 +136,7 @@ static int tabla_codec_enable_slimrx(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event);
 static int tabla_codec_enable_slimtx(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event);
+static int emu_analog_antipop;
 
 
 enum tabla_bandgap_type {
@@ -720,6 +722,17 @@ static int tabla_get_iir_band_audio_mixer(
 	return 0;
 }
 
+int tabla_mot_get_emu_audio_state(void)
+{
+	/* yes this is a bit of a hack.  This information should reside in the
+	   card private data so it's accessible by all soc components, but QC
+	   isn't using that mechanism yet and I don't want to add it just for
+	   this one flag
+	*/
+	return emu_analog_antipop;
+}
+
+
 static void set_iir_band_coeff(struct snd_soc_codec *codec,
 				int iir_idx, int band_idx,
 				int coeff_idx, uint32_t value)
@@ -1102,6 +1115,38 @@ static int tabla_codec_hphl_dem_input_selection(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static int snd_soc_get_emu_antipop(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = emu_analog_antipop;
+	return 0;
+}
+
+static int snd_soc_put_emu_antipop(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned short val = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: old value %u; new value %u\n", __func__,
+			emu_analog_antipop, val);
+
+	if (val > 1)
+		return -EINVAL;
+	else if (val == emu_analog_antipop)
+		return 0;
+	emu_analog_antipop = val;
+
+	if (val == 1) {
+		set_mux_ctrl_mode_for_audio(MUXMODE_AUDIO);
+		pr_debug("%s SET EMU TO MUXMODE_AUDIO\n", __func__);
+	} else {
+		set_mux_ctrl_mode_for_audio(MUXMODE_USB);
+		pr_debug("%s SET EMU TO MUXMODE_USB\n", __func__);
+	}
+
+	return 0;
+}
+
 static const char *const tabla_anc_func_text[] = {"OFF", "ON"};
 static const struct soc_enum tabla_anc_func_enum =
 	SOC_ENUM_SINGLE_EXT(2, tabla_anc_func_text);
@@ -1334,6 +1379,9 @@ static const struct snd_kcontrol_new tabla_snd_controls[] = {
 				   tabla_get_compander, tabla_set_compander),
 	SOC_SINGLE_EXT("COMP2 Switch", SND_SOC_NOPM, COMPANDER_2, 1, 0,
 				   tabla_get_compander, tabla_set_compander),
+
+	SOC_SINGLE_BOOL_EXT("EMU Antipop", 0, snd_soc_get_emu_antipop,
+	snd_soc_put_emu_antipop),
 };
 
 static const struct snd_kcontrol_new tabla_1_x_snd_controls[] = {
@@ -2297,9 +2345,12 @@ static int tabla_codec_enable_lineout(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, lineout_gain_reg, 0x40, 0x40);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
-		pr_debug("%s: sleeping 16 us after %s PA turn on\n",
+		/* Need 64 mSeconds of delay.Since we are using mono
+		differential speaker, need to sleep 32mSeconds for
+		each LINEOUT PA.*/
+		pr_debug("%s: sleeping 32 us after %s PA turn on\n",
 				__func__, w->name);
-		usleep_range(16, 16);
+		usleep_range(32, 32);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		snd_soc_update_bits(codec, lineout_gain_reg, 0x40, 0x00);
@@ -3026,12 +3077,15 @@ static int tabla_hphr_dac_event(struct snd_soc_dapm_widget *w,
 	}
 	return 0;
 }
+extern void alsa_to_h2w_headset_report(int state);
 
 static void tabla_snd_soc_jack_report(struct tabla_priv *tabla,
 				      struct snd_soc_jack *jack, int status,
 				      int mask)
 {
 	/* XXX: wake_lock_timeout()? */
+	if (TABLA_JACK_MASK & mask)
+		alsa_to_h2w_headset_report(status ? tabla->current_plug : 0);
 	snd_soc_jack_report_no_dapm(jack, status, mask);
 }
 
@@ -6537,8 +6591,11 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 		mask = tabla_get_button_mask(btn);
 		priv->buttons_pressed |= mask;
 		wcd9xxx_lock_sleep(core);
+		/* Shorten delay from 400ms to 10ms for comparability with */
+		/* Motorola's extention for the HS key events like */
+		/* 2 short HS key press = KEY_MEDIA_NEXT */
 		if (schedule_delayed_work(&priv->mbhc_btn_dwork,
-					  msecs_to_jiffies(400)) == 0) {
+					  msecs_to_jiffies(10)) == 0) {
 			WARN(1, "Button pressed twice without release"
 			     "event\n");
 			wcd9xxx_unlock_sleep(core);
@@ -8870,6 +8927,7 @@ static int __init tabla_codec_init(void)
 		rtn = platform_driver_register(&tabla1x_codec_driver);
 		if (rtn != 0)
 			platform_driver_unregister(&tabla_codec_driver);
+		emu_analog_antipop = 0;
 	}
 	return rtn;
 }
