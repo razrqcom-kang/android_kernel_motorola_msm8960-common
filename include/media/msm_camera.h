@@ -28,6 +28,8 @@
 #include <linux/time.h>
 #endif
 
+#include "msm_camera_query.h"
+
 #include <linux/msm_ion.h>
 
 #define BIT(nr)   (1UL << (nr))
@@ -1018,7 +1020,17 @@ struct msm_snapshot_pp_status {
 #define CFG_SET_VISION_MODE           55
 #define CFG_SET_VISION_AE             56
 #define CFG_HDR_UPDATE                57
-#define CFG_MAX                       58
+/* Motorola */
+#define CFG_SET_LENS_MODE             58
+#define CFG_GET_SNAPSHOTDATA          59
+#define CFG_SET_GAMMA                 60
+#define CFG_SET_SHARPENING            61
+#define CFG_SET_LENSSHADING           62
+#define CFG_SET_TARGET_EXPOSURE       63
+#define CFG_GET_MODULE_INFO           64
+#define CFG_SET_FPS_RANGE             65
+#define CFG_GET_CUR_LENS_POS          66
+#define CFG_MAX                       67
 
 #define MOVE_NEAR	0
 #define MOVE_FAR	1
@@ -1633,6 +1645,25 @@ struct msm_cam_clk_setting {
 	uint8_t enable;
 };
 
+struct snapshotdata {
+	uint32_t exposure_time;
+	int light_source;
+	int metering_mode;
+	int flash;
+};
+
+struct factory_settings {
+	uint8_t gamma_unity;
+	uint8_t lens_shading;
+	uint8_t sharpening;
+	uint8_t target_exposure;
+};
+
+struct fps_range_t {
+	uint16_t max_fps;
+	uint16_t min_fps;
+};
+
 struct sensor_cfg_data {
 	int cfgtype;
 	int mode;
@@ -1677,6 +1708,10 @@ struct sensor_cfg_data {
 		void *setting;
 		int32_t vision_mode_enable;
 		int32_t vision_ae;
+		struct factory_settings fact_set;
+		struct snapshotdata data;
+		struct otp_info_t module_info;
+		struct fps_range_t fps_range;
 	} cfg;
 };
 
@@ -1811,6 +1846,8 @@ struct msm_actuator_cfg_data {
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
 		enum af_camera_name cam_name;
+		uint8_t lens_mode;
+		int16_t cur_lens_pos;
 	} cfg;
 };
 
