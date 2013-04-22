@@ -3550,11 +3550,14 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 		gcwq->trustee_state = TRUSTEE_BUTCHER;
 		/* fall through */
 	case CPU_UP_CANCELED:
-		destroy_worker(gcwq->first_idle);
+		if (gcwq->first_idle)
+			destroy_worker(gcwq->first_idle);
 		gcwq->first_idle = NULL;
 		break;
 
 	case CPU_DOWN_FAILED:
+		if (!gcwq->first_idle)
+			break;
 	case CPU_ONLINE:
 		gcwq->flags &= ~GCWQ_DISASSOCIATED;
 		if (gcwq->trustee_state != TRUSTEE_DONE) {

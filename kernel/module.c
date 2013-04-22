@@ -2869,6 +2869,9 @@ static struct module *load_module(void __user *umod,
 	struct load_info info = { NULL, };
 	struct module *mod;
 	long err;
+#ifdef CONFIG_MODULE_EXTRA_COPY
+	void *extra_copy = NULL;
+#endif
 
 	pr_debug("load_module: umod=%p, len=%lu, uargs=%p\n",
 	       umod, len, uargs);
@@ -2877,6 +2880,17 @@ static struct module *load_module(void __user *umod,
 	err = copy_and_check(&info, umod, len, uargs);
 	if (err)
 		return ERR_PTR(err);
+
+#ifdef CONFIG_MODULE_EXTRA_COPY
+	/* Before we start modifying the module code to link it in, make an
+	   extra copy that will remain pristine. */
+	extra_copy = vmalloc(info.len);
+	if (extra_copy == NULL) {
+		err = -ENOMEM;
+		goto free_copy;
+	}
+	memcpy(extra_copy, info.hdr, info.len);
+#endif
 
 	/* Figure out module layout, and allocate all the memory. */
 	mod = layout_and_allocate(&info);
@@ -2962,8 +2976,18 @@ static struct module *load_module(void __user *umod,
 	if (err < 0)
 		goto unlink;
 
+
+#ifdef CONFIG_MODULE_EXTRA_COPY
+	/* Keep the linked copy as well as the raw copy, in case the
+	   module wants to inspect both. */
+	mod->raw_binary_ptr = extra_copy;
+	mod->raw_binary_size = info.len;
+	mod->linked_binary_ptr = info.hdr;
+	mod->linked_binary_size = info.len;
+#else
 	/* Get rid of temporary copy. */
 	free_copy(&info);
+#endif
 
 	/* Done! */
 	trace_module_load(mod);
@@ -2990,6 +3014,10 @@ static struct module *load_module(void __user *umod,
  free_module:
 	module_deallocate(mod, &info);
  free_copy:
+#ifdef CONFIG_MODULE_EXTRA_COPY
+	if (extra_copy != NULL)
+		vfree(extra_copy);
+#endif
 	free_copy(&info);
 	return ERR_PTR(err);
 }
@@ -3040,6 +3068,14 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 	/* Start the module */
 	if (mod->init != NULL)
 		ret = do_one_initcall(mod->init);
+#ifdef CONFIG_MODULE_EXTRA_COPY
+	if (mod->raw_binary_ptr != NULL)
+		vfree(mod->raw_binary_ptr);
+	if (mod->linked_binary_ptr != NULL)
+		vfree(mod->linked_binary_ptr);
+	mod->raw_binary_ptr = mod->linked_binary_ptr = NULL;
+	mod->raw_binary_size = mod->linked_binary_size = 0;
+#endif
 	if (ret < 0) {
 		/* Init routine failed: abort.  Try to protect us from
                    buggy refcounters. */

@@ -16,6 +16,7 @@
 #include <linux/memblock.h>
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
+#include <linux/sort.h>
 
 #include <asm/cp15.h>
 #include <asm/cputype.h>
@@ -945,9 +946,40 @@ early_param("vmalloc", early_vmalloc);
 
 phys_addr_t arm_lowmem_limit __initdata = 0;
 
+#if defined(CONFIG_DONT_MAP_HOLE_IN_LOWMEM)
+static int __init meminfo_cmp(const void *_a, const void *_b)
+{
+	const struct membank *a = _a, *b = _b;
+	long cmp = bank_pfn_start(a) - bank_pfn_start(b);
+	return cmp < 0 ? -1 : cmp > 0 ? 1 : 0;
+}
+#endif
+
 void __init sanity_check_meminfo(void)
 {
 	int i, j, highmem = 0;
+#if defined(CONFIG_DONT_MAP_HOLE_IN_LOWMEM)
+	unsigned long start=0, prev=0, delta=0;
+#endif
+
+#if defined(CONFIG_DONT_MAP_HOLE_IN_LOWMEM)
+	/* TODO: is there overlap in meminfo? */
+	sort(&meminfo.bank, meminfo.nr_banks, sizeof(meminfo.bank[0]),
+		meminfo_cmp, NULL);
+	vmeminfo.nr_banks = meminfo.nr_banks;
+	for (i = 0; i < meminfo.nr_banks; i++) {
+		if (!i) {
+			start = PAGE_OFFSET;
+			prev = bank_phys_start(&meminfo.bank[i]);
+			delta = PAGE_OFFSET - PHYS_OFFSET;
+		}
+		vmeminfo.vbank[i].start = start;
+		delta -= bank_phys_start(&meminfo.bank[i]) - prev;
+		prev = bank_phys_end(&meminfo.bank[i]);
+		start += bank_phys_size(&meminfo.bank[i]);
+		vmeminfo.vbank[i].delta = delta;
+	}
+#endif
 
 #ifdef CONFIG_DONT_MAP_HOLE_AFTER_MEMBANK0
 	find_membank0_hole();
@@ -1089,7 +1121,7 @@ static inline void prepare_page_table(void)
 	 * Clear out all the kernel space mappings, except for the first
 	 * memory bank, up to the vmalloc region.
 	 */
-	for (addr = __phys_to_virt(end);
+	for (addr = __phys_to_virt(end - 4) + 4;
 	     addr < VMALLOC_START; addr += PMD_SIZE)
 		pmd_clear(pmd_off_k(addr));
 }
@@ -1366,7 +1398,7 @@ static void __init map_lowmem(void)
 
 			map.pfn = __phys_to_pfn(__pa(__init_data));
 			map.virtual = (unsigned long)__init_data;
-			map.length = __phys_to_virt(end) - (unsigned int)__init_data;
+			map.length = __phys_to_virt(end - 4) + 4 - (unsigned int)__init_data;
 			map.type = MT_MEMORY_RW;
 		} else {
 			map.length = end - start;

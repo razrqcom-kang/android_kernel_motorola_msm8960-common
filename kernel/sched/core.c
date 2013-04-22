@@ -4875,7 +4875,7 @@ void sched_show_task(struct task_struct *p)
 	show_stack(p, NULL);
 }
 
-void show_state_filter(unsigned long state_filter)
+void show_state_filter(unsigned long state_filter, unsigned long threads_filter)
 {
 	struct task_struct *g, *p;
 
@@ -4893,20 +4893,23 @@ void show_state_filter(unsigned long state_filter)
 		 * console might take a lot of time:
 		 */
 		touch_nmi_watchdog();
-		if (!state_filter || (p->state & state_filter))
+		if ((!state_filter || (p->state & state_filter)) &&
+			(((threads_filter & SHOW_KTHREADS) && (!p->mm))
+			|| ((threads_filter & SHOW_APP_THREADS) && (p->mm))))
 			sched_show_task(p);
 	} while_each_thread(g, p);
 
 	touch_all_softlockup_watchdogs();
 
 #ifdef CONFIG_SCHED_DEBUG
-	sysrq_sched_debug_show();
+	if ((threads_filter & SHOW_KTHREADS) && (!p->mm))
+		sysrq_sched_debug_show();
 #endif
 	rcu_read_unlock();
 	/*
-	 * Only show locks if all tasks are dumped:
+	 * Only show locks if all kernel tasks are dumped:
 	 */
-	if (!state_filter)
+	if ((!state_filter) && (threads_filter & SHOW_KTHREADS) && (!p->mm))
 		debug_show_all_locks();
 }
 
@@ -8271,3 +8274,37 @@ struct cgroup_subsys cpuacct_subsys = {
 	.subsys_id = cpuacct_subsys_id,
 };
 #endif	/* CONFIG_CGROUP_CPUACCT */
+
+u32 cpu_curr_ptr_addr(int cpu)
+{
+	u32 ret = 0;
+	if (cpu_present(cpu))
+		ret = (unsigned long)&cpu_curr(cpu);
+	return ret;
+}
+
+void show_cpu_current_stack_mem(void)
+{
+	struct rq *rq;
+	struct task_struct *curr;
+	int cpu;
+
+	touch_softlockup_watchdog();
+
+	for_each_possible_cpu(cpu) {
+
+		if (cpu == smp_processor_id())
+			continue;
+
+		rq = cpu_rq(cpu);
+		curr = rq->curr;
+		printk(KERN_DEBUG "++++ CPU%d Current Task(%s,%d) Stack ++++\n",
+					cpu, curr->comm, curr->pid);
+		sched_show_task(curr);
+
+		show_process_mem((unsigned long)curr->stack,
+				 THREAD_SIZE, "stack");
+
+		printk(KERN_DEBUG "\n+++++++++ End of Stack Dump +++++++++++\n");
+	}
+}

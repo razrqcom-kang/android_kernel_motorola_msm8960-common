@@ -7,6 +7,7 @@
  *
  * Copyright IBM Corp. 2007-2010 Mel Gorman <mel@csn.ul.ie>
  */
+#include <linux/export.h>
 #include <linux/swap.h>
 #include <linux/migrate.h>
 #include <linux/compaction.h>
@@ -843,7 +844,7 @@ static int compact_node(int nid)
 }
 
 /* Compact all nodes in the system */
-static int compact_nodes(void)
+int compact_nodes(void)
 {
 	int nid;
 
@@ -855,6 +856,7 @@ static int compact_nodes(void)
 
 	return COMPACT_COMPLETE;
 }
+EXPORT_SYMBOL_GPL(compact_nodes);
 
 /* The written value is actually unused, all memory is compacted */
 int sysctl_compact_memory;
