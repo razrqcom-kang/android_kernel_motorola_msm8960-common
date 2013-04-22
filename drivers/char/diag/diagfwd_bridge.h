@@ -35,14 +35,14 @@ struct diag_bridge_dev {
 	char name[20];
 	int enabled;
 	struct mutex bridge_mutex;
-	int usb_connected;
+	int channel_connected;
 	int read_len;
 	int write_len;
-	unsigned char *usb_buf_out;
-	struct usb_diag_ch *ch;
+	unsigned char *buf_out;
+	struct legacy_diag_ch *ch;
 	struct workqueue_struct *wq;
 	struct work_struct diag_read_work;
-	struct diag_request *usb_read_ptr;
+	struct diag_request *channel_read_ptr;
 	struct work_struct usb_read_complete_work;
 };
 

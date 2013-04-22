@@ -54,9 +54,9 @@ void __diag_sdio_send_req(void)
 			else {
 				APPEND_DEBUG('i');
 				sdio_read(driver->sdio_ch, buf, r);
-				if (((!driver->usb_connected) && (driver->
-					logging_mode == USB_MODE)) || (driver->
-					logging_mode == NO_LOGGING_MODE)) {
+				if (((!driver->channel_connected) && 
+					(driver-> logging_mode == USB_MODE || driver-> logging_mode == USB_INTERNAL)) ||
+					(driver->logging_mode == NO_LOGGING_MODE)) {
 					/* Drop the diag payload */
 					driver->in_busy_sdio = 0;
 					return;

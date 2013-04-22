@@ -21,13 +21,21 @@
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/wakelock.h>
+#include <linux/diagchar.h>
 #include <mach/msm_smd.h>
 #include <asm/atomic.h>
 #include <asm/mach-types.h>
+#ifdef CONFIG_DIAG_OVER_USB
+#include <mach/usbdiag.h>
+#endif
+#ifdef CONFIG_DIAG_INTERNAL
+#include <mach/tty_diag.h>
+#endif
 
 /* Size of the USB buffers used for read and write*/
-#define USB_MAX_OUT_BUF 4096
+#define MAX_OUT_BUF 4096
 #define APPS_BUF_SIZE	2000
+#define USB_MAX_OUT_BUF	MAX_OUT_BUF
 #define IN_BUF_SIZE		16384
 #define MAX_IN_BUF_SIZE	32768
 #define MAX_SYNC_OBJ_NAME_SIZE	32
@@ -156,7 +164,7 @@ struct diag_nrt_wake_lock {
 };
 
 /* This structure is defined in USB header file */
-#ifndef CONFIG_DIAG_OVER_USB
+#if !defined(CONFIG_DIAG_OVER_USB) && !defined(CONFIG_DIAG_INTERNAL)
 struct diag_request {
 	char *buf;
 	int length;
@@ -257,7 +265,7 @@ struct diagchar_dev {
 	struct diag_smd_info smd_data[NUM_SMD_DATA_CHANNELS];
 	struct diag_smd_info smd_cntl[NUM_SMD_CONTROL_CHANNELS];
 	struct diag_smd_info smd_dci[NUM_SMD_DCI_CHANNELS];
-	unsigned char *usb_buf_out;
+	unsigned char *buf_out;
 	unsigned char *apps_rsp_buf;
 	unsigned char *user_space_data;
 	/* buffer for updating mask to peripherals */
@@ -271,9 +279,10 @@ struct diagchar_dev {
 	unsigned hdlc_count;
 	unsigned hdlc_escape;
 	int in_busy_pktdata;
-#ifdef CONFIG_DIAG_OVER_USB
-	int usb_connected;
-	struct usb_diag_ch *legacy_ch;
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
+	struct legacy_diag_ch *legacy_ch;
+	int channel_connected;
+	int usb_req_allocated;
 	struct work_struct diag_proc_hdlc_work;
 	struct work_struct diag_read_work;
 #endif
@@ -288,7 +297,7 @@ struct diagchar_dev {
 	struct diag_master_table *table;
 	uint8_t *pkt_buf;
 	int pkt_length;
-	struct diag_request *usb_read_ptr;
+	struct diag_request *channel_read_ptr;
 	struct diag_request *write_ptr_svc;
 	int logging_mode;
 	int mask_check;
@@ -301,7 +310,7 @@ struct diagchar_dev {
 	struct sdio_channel *sdio_ch;
 	int read_len_mdm;
 	int in_busy_sdio;
-	struct usb_diag_ch *mdm_ch;
+	struct legacy_diag_ch *mdm_ch;
 	struct work_struct diag_read_mdm_work;
 	struct workqueue_struct *diag_sdio_wq;
 	struct work_struct diag_read_sdio_work;

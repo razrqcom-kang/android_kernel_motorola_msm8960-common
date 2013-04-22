@@ -275,10 +275,15 @@ static int diagchar_close(struct inode *inode, struct file *file)
 		driver->callback_process = NULL;
 	}
 
-#ifdef CONFIG_DIAG_OVER_USB
-	/* If the SD logging process exits, change logging to USB mode */
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
+	/* If the SD logging process exits, change logging to
+	appropriate channel mode */
 	if (driver->logging_process_id == current->tgid) {
+#if defined(CONFIG_DIAG_OVER_USB)
 		driver->logging_mode = USB_MODE;
+#elif defined(CONFIG_DIAG_INTERNAL)
+		driver->logging_mode = INTERNAL_MODE;
+#endif
 		diag_send_diag_mode_update(MODE_REALTIME);
 		diagfwd_connect();
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
@@ -577,121 +582,54 @@ int diag_command_reg(unsigned long ioarg)
 {
 	int i = 0, success = -EINVAL, j;
 	void *temp_buf;
-	unsigned int count_entries = 0, interim_count = 0;
-	struct bindpkt_params_per_process pkt_params;
-	struct bindpkt_params *params;
-	struct bindpkt_params *head_params;
-	if (copy_from_user(&pkt_params, (void *)ioarg,
-		   sizeof(struct bindpkt_params_per_process))) {
-		return -EFAULT;
-	}
-	if ((UINT_MAX/sizeof(struct bindpkt_params)) <
-						 pkt_params.count) {
-		pr_warn("diag: integer overflow while multiply\n");
-		return -EFAULT;
-	}
-	head_params = kzalloc(pkt_params.count*sizeof(
-		struct bindpkt_params), GFP_KERNEL);
-	if (!head_params) {
-		pr_err("diag: unable to alloc memory\n");
-		return -ENOMEM;
-	} else
-		params = head_params;
-	if (copy_from_user(params, pkt_params.params,
-		   pkt_params.count*sizeof(struct bindpkt_params))) {
-		kfree(head_params);
-		return -EFAULT;
-	}
+	unsigned int count_entries = 0; //, interim_count = 0;
+	struct bindpkt_params_per_process *pkt_params =
+			 (struct bindpkt_params_per_process *) ioarg;
 	mutex_lock(&driver->diagchar_mutex);
 	for (i = 0; i < diag_max_reg; i++) {
 		if (driver->table[i].process_id == 0) {
-			diag_add_reg(i, params, &success,
+			diag_add_reg(i, pkt_params->params, &success,
 						 &count_entries);
-			if (pkt_params.count > count_entries) {
-				params++;
+			if (pkt_params->count > count_entries) {
+				pkt_params->params++;
 			} else {
-				kfree(head_params);
 				mutex_unlock(&driver->diagchar_mutex);
 				return success;
 			}
 		}
 	}
 	if (i < diag_threshold_reg) {
-		/* Increase table size by amount required */
-		if (pkt_params.count >= count_entries) {
-			interim_count = pkt_params.count -
-						 count_entries;
-		} else {
-			pr_warn("diag: error in params count\n");
-			kfree(head_params);
-			mutex_unlock(&driver->diagchar_mutex);
-			return -EFAULT;
-		}
-		if (UINT_MAX - diag_max_reg >=
-						interim_count) {
-			diag_max_reg += interim_count;
-		} else {
-			pr_warn("diag: Integer overflow\n");
-			kfree(head_params);
-			mutex_unlock(&driver->diagchar_mutex);
-			return -EFAULT;
-		}
+		diag_max_reg += pkt_params->count -
+					 count_entries;
 		/* Make sure size doesnt go beyond threshold */
 		if (diag_max_reg > diag_threshold_reg) {
 			diag_max_reg = diag_threshold_reg;
 			pr_err("diag: best case memory allocation\n");
 		}
-		if (UINT_MAX/sizeof(struct diag_master_table) <
-							 diag_max_reg) {
-			pr_warn("diag: integer overflow\n");
-			kfree(head_params);
-			mutex_unlock(&driver->diagchar_mutex);
-			return -EFAULT;
-		}
 		temp_buf = krealloc(driver->table,
 				 diag_max_reg*sizeof(struct
 				 diag_master_table), GFP_KERNEL);
 		if (!temp_buf) {
+			diag_max_reg -= pkt_params->count -
+						 count_entries;
 			pr_err("diag: Insufficient memory for reg.\n");
-
-			if (pkt_params.count >= count_entries) {
-				interim_count = pkt_params.count -
-							 count_entries;
-			} else {
-				pr_warn("diag: params count error\n");
-				kfree(head_params);
-				mutex_unlock(&driver->diagchar_mutex);
-				return -EFAULT;
-			}
-			if (diag_max_reg >= interim_count) {
-				diag_max_reg -= interim_count;
-			} else {
-				pr_warn("diag: Integer underflow\n");
-				kfree(head_params);
-				mutex_unlock(&driver->diagchar_mutex);
-				return -EFAULT;
-			}
-			kfree(head_params);
 			mutex_unlock(&driver->diagchar_mutex);
 			return 0;
 		} else {
 			driver->table = temp_buf;
 		}
 		for (j = i; j < diag_max_reg; j++) {
-			diag_add_reg(j, params, &success,
+			diag_add_reg(j, pkt_params->params, &success,
 						 &count_entries);
-			if (pkt_params.count > count_entries) {
-				params++;
+			if (pkt_params->count > count_entries) {
+				pkt_params->params++;
 			} else {
-				kfree(head_params);
 				mutex_unlock(&driver->diagchar_mutex);
 				return success;
 			}
 		}
-		kfree(head_params);
 		mutex_unlock(&driver->diagchar_mutex);
 	} else {
-		kfree(head_params);
 		mutex_unlock(&driver->diagchar_mutex);
 		pr_err("Max size reached, Pkt Registration failed for Process %d",
 					current->tgid);
@@ -860,18 +798,20 @@ int diag_switch_logging(unsigned long ioarg)
 						driver->logging_mode);
 		diag_cmp_logging_modes_diagfwd_bridge(temp,
 						driver->logging_mode);
-	} else if (temp == USB_MODE && driver->logging_mode
-						 == NO_LOGGING_MODE) {
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
+	} else if ((temp == USB_MODE || temp == INTERNAL_MODE) &&
+			 driver->logging_mode == NO_LOGGING_MODE) {
 		diagfwd_disconnect();
 		diag_cmp_logging_modes_diagfwd_bridge(temp,
 						driver->logging_mode);
-	} else if (temp == NO_LOGGING_MODE && driver->logging_mode
-							== USB_MODE) {
+	} else if (temp == NO_LOGGING_MODE &&
+			 (driver->logging_mode == USB_MODE ||
+			 driver->logging_mode == INTERNAL_MODE)) {
 		diagfwd_connect();
 		diag_cmp_logging_modes_diagfwd_bridge(temp,
 						driver->logging_mode);
-	} else if (temp == USB_MODE && driver->logging_mode
-						== MEMORY_DEVICE_MODE) {
+	} else if ((temp == USB_MODE || temp == INTERNAL_MODE) &&
+			 driver->logging_mode == MEMORY_DEVICE_MODE) {
 		diagfwd_disconnect();
 		for (i = 0; i < NUM_SMD_DATA_CHANNELS; i++) {
 			driver->smd_data[i].in_busy_1 = 0;
@@ -886,10 +826,12 @@ int diag_switch_logging(unsigned long ioarg)
 		diag_cmp_logging_modes_diagfwd_bridge(temp,
 						driver->logging_mode);
 	} else if (temp == MEMORY_DEVICE_MODE &&
-			 driver->logging_mode == USB_MODE) {
+			 (driver->logging_mode == USB_MODE ||
+			 driver->logging_mode == INTERNAL_MODE)) {
 		diagfwd_connect();
 		diag_cmp_logging_modes_diagfwd_bridge(temp,
 						driver->logging_mode);
+#endif
 	}
 	success = 1;
 	return success;
@@ -1379,14 +1321,15 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		driver->dropped_count++;
 		return -EBADMSG;
 	}
-#ifdef CONFIG_DIAG_OVER_USB
-	if (((pkt_type != DCI_DATA_TYPE) && (driver->logging_mode == USB_MODE)
-				&& (!driver->usb_connected)) ||
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
+	if (((pkt_type != DCI_DATA_TYPE) && (driver->logging_mode == USB_MODE ||
+				driver->logging_mode == INTERNAL_MODE)
+				&& (!driver->channel_connected)) ||
 				(driver->logging_mode == NO_LOGGING_MODE)) {
 		/*Drop the diag payload */
 		return -EIO;
 	}
-#endif /* DIAG over USB */
+#endif /* DIAG over USB or internal*/
 	if (pkt_type == DCI_DATA_TYPE) {
 		err = copy_from_user(driver->user_space_data, buf + 4,
 							 payload_size);
@@ -1836,10 +1779,95 @@ static const struct file_operations diagcharfops = {
 	.release = diagchar_close
 };
 
+static ssize_t diag_logging_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buff)
+{
+
+	switch (driver->logging_mode) {
+	case USB_MODE:
+		return snprintf(buff, PAGE_SIZE, "%s", USB_MODE_NAME);
+	case MEMORY_DEVICE_MODE:
+		return snprintf(buff, PAGE_SIZE, "%s", MEMORY_DEVICE_MODE_NAME);
+	case NO_LOGGING_MODE:
+		return snprintf(buff, PAGE_SIZE, "%s", NO_LOGGING_MODE_NAME);
+	case UART_MODE:
+		return snprintf(buff, PAGE_SIZE, "%s", UART_MODE_NAME);
+	case INTERNAL_MODE:
+		return snprintf(buff, PAGE_SIZE, "%s", INTERNAL_MODE_NAME);
+	default:
+		return snprintf(buff, PAGE_SIZE, "%s", "invalid");
+	}
+}
+
+static ssize_t diag_logging_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buff, size_t size)
+{
+	char buf[256], *b;
+
+	strlcpy(buf, buff, sizeof(buf));
+	b = strim(buf);
+
+	if (strlen(b)) {
+		if (!strcmp(b, MEMORY_DEVICE_MODE_NAME))
+			diag_switch_logging(MEMORY_DEVICE_MODE);
+		else if (!strcmp(b, NO_LOGGING_MODE_NAME))
+			diag_switch_logging(NO_LOGGING_MODE);
+		else if (!strcmp(b, UART_MODE_NAME))
+			diag_switch_logging(UART_MODE);
+#ifdef CONFIG_DIAG_OVER_USB
+		else if (!strcmp(b, USB_MODE_NAME))
+			diag_switch_logging(USB_MODE);
+#endif
+#ifdef CONFIG_DIAG_INTERNAL
+		else if (!strcmp(b, INTERNAL_MODE_NAME))
+			diag_switch_logging(INTERNAL_MODE);
+#endif
+	}
+
+	return size;
+}
+
+#ifdef CONFIG_DIAG_INTERNAL
+static ssize_t diag_dbg_ftm_show(struct device *dev,
+		struct device_attribute *attr, char *buff)
+{
+	/* print current dbg_ftm flag value */
+	return snprintf(buff, PAGE_SIZE, "%d",
+			tty_diag_get_dbg_ftm_flag_value());
+}
+
+static ssize_t diag_dbg_ftm_store(struct device *dev,
+		struct device_attribute *attr, const char *buff, size_t size)
+{
+	char buf[256], *b;
+
+	strlcpy(buf, buff, sizeof(buf));
+	b = strim(buf);
+
+	if (strnlen(b, 1)) {
+		if (!strncmp(b, "0", 1)) {
+			tty_diag_set_dbg_ftm_flag_value(0);
+		} else {
+			/* we consider other non-ZERO value as "1" here */
+			tty_diag_set_dbg_ftm_flag_value(1);
+		}
+	}
+
+	return size;
+}
+
+static DEVICE_ATTR(dbg_ftm, S_IRUGO | S_IWUSR, diag_dbg_ftm_show,
+						diag_dbg_ftm_store);
+#endif
+
+static DEVICE_ATTR(logging_mode, S_IRUGO | S_IWUSR, diag_logging_mode_show,
+						 diag_logging_mode_store);
+
 static int diagchar_setup_cdev(dev_t devno)
 {
 
 	int err;
+	struct device *dev;
 
 	cdev_init(driver->cdev, &diagcharfops);
 
@@ -1860,11 +1888,27 @@ static int diagchar_setup_cdev(dev_t devno)
 		return -1;
 	}
 
-	device_create(driver->diagchar_class, NULL, devno,
+	dev = device_create(driver->diagchar_class, NULL, devno,
 				  (void *)driver, "diag");
+	if (dev)
+		err = device_create_file(dev, &dev_attr_logging_mode);
+
+	if (!dev || err) {
+		printk(KERN_ERR "Error creating diag sysfs\n");
+		return -1;
+	}
+
+#ifdef CONFIG_DIAG_INTERNAL
+	if (dev)
+		err = device_create_file(dev, &dev_attr_dbg_ftm);
+
+	if (!dev || err) {
+		printk(KERN_ERR "Error creating diag sysfs on dbg_ftm_mode\n");
+		return -ENXIO;
+	}
+#endif
 
 	return 0;
-
 }
 
 static int diagchar_cleanup(void)
@@ -1947,7 +1991,11 @@ static int __init diagchar_init(void)
 		driver->itemsize_write_struct = itemsize_write_struct;
 		driver->poolsize_write_struct = poolsize_write_struct;
 		driver->num_clients = max_clients;
+#if defined(CONFIG_DIAG_OVER_USB)
 		driver->logging_mode = USB_MODE;
+#elif defined(CONFIG_DIAG_INTERNAL)
+		driver->logging_mode = INTERNAL_MODE;
+#endif
 		driver->socket_process = NULL;
 		driver->callback_process = NULL;
 		driver->mask_check = 0;

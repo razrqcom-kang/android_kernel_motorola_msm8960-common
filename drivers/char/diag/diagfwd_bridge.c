@@ -55,10 +55,10 @@ void connect_bridge(int process_cable, int index)
 		err = usb_diag_alloc_req(diag_bridge[index].ch, N_MDM_WRITE,
 			       N_MDM_READ);
 		if (err)
-			pr_err("diag: unable to alloc USB req for ch %d err:%d\n",
+			pr_err("diag: unable to alloc channel req for ch %d err:%d\n",
 							 index, err);
 
-		diag_bridge[index].usb_connected = 1;
+		diag_bridge[index].channel_connected = 1;
 	}
 
 	if (index == SMUX && driver->diag_smux_enabled) {
@@ -124,7 +124,7 @@ int diagfwd_disconnect_bridge(int process_cable)
 			mutex_lock(&diag_bridge[i].bridge_mutex);
 			/* If the usb cable is being disconnected */
 			if (process_cable) {
-				diag_bridge[i].usb_connected = 0;
+				diag_bridge[i].channel_connected = 0;
 				usb_diag_free_req(diag_bridge[i].ch);
 			}
 
@@ -189,7 +189,7 @@ int diagfwd_read_complete_bridge(struct diag_request *diag_read_ptr)
 	 * mdm data on to the HSIC.
 	 */
 	if (!diag_hsic[index].in_busy_hsic_write &&
-		diag_bridge[index].usb_buf_out &&
+		diag_bridge[index].buf_out &&
 		(diag_bridge[index].read_len > 0)) {
 
 		/*
@@ -199,7 +199,7 @@ int diagfwd_read_complete_bridge(struct diag_request *diag_read_ptr)
 		 */
 		int err;
 		diag_hsic[index].in_busy_hsic_write = 1;
-		err = diag_bridge_write(index, diag_bridge[index].usb_buf_out,
+		err = diag_bridge_write(index, diag_bridge[index].buf_out,
 					diag_bridge[index].read_len);
 		if (err) {
 			pr_err_ratelimited("diag: mdm data on HSIC write err: %d\n",
@@ -281,20 +281,20 @@ void diagfwd_bridge_init(int index)
 	diag_bridge[index].wq = create_singlethread_workqueue(name);
 	diag_bridge[index].read_len = 0;
 	diag_bridge[index].write_len = 0;
-	if (diag_bridge[index].usb_buf_out == NULL)
-		diag_bridge[index].usb_buf_out =
+	if (diag_bridge[index].buf_out == NULL)
+		diag_bridge[index].buf_out =
 				 kzalloc(USB_MAX_OUT_BUF, GFP_KERNEL);
-	if (diag_bridge[index].usb_buf_out == NULL)
+	if (diag_bridge[index].buf_out == NULL)
 		goto err;
-	if (diag_bridge[index].usb_read_ptr == NULL)
-		diag_bridge[index].usb_read_ptr =
+	if (diag_bridge[index].channel_read_ptr == NULL)
+		diag_bridge[index].channel_read_ptr =
 			 kzalloc(sizeof(struct diag_request), GFP_KERNEL);
-	if (diag_bridge[index].usb_read_ptr == NULL)
+	if (diag_bridge[index].channel_read_ptr == NULL)
 		goto err;
-	if (diag_bridge[index].usb_read_ptr->context == NULL)
-		diag_bridge[index].usb_read_ptr->context =
+	if (diag_bridge[index].channel_read_ptr->context == NULL)
+		diag_bridge[index].channel_read_ptr->context =
 					 kzalloc(sizeof(int), GFP_KERNEL);
-	if (diag_bridge[index].usb_read_ptr->context == NULL)
+	if (diag_bridge[index].channel_read_ptr->context == NULL)
 		goto err;
 	mutex_init(&diag_bridge[index].bridge_mutex);
 
@@ -338,10 +338,10 @@ void diagfwd_bridge_init(int index)
 	 return;
 err:
 	pr_err("diag: Could not initialize for bridge forwarding\n");
-	kfree(diag_bridge[index].usb_buf_out);
+	kfree(diag_bridge[index].buf_out);
 	kfree(diag_hsic[index].hsic_buf_tbl);
 	kfree(driver->write_ptr_mdm);
-	kfree(diag_bridge[index].usb_read_ptr);
+	kfree(diag_bridge[index].channel_read_ptr);
 	if (diag_bridge[index].wq)
 		destroy_workqueue(diag_bridge[index].wq);
 	return;
@@ -374,12 +374,12 @@ void diagfwd_bridge_exit(void)
 	for (i = 0; i < MAX_BRIDGES; i++) {
 		if (diag_bridge[i].enabled) {
 #ifdef CONFIG_DIAG_OVER_USB
-			if (diag_bridge[i].usb_connected)
+			if (diag_bridge[i].channel_connected)
 				usb_diag_free_req(diag_bridge[i].ch);
 			usb_diag_close(diag_bridge[i].ch);
 #endif
-			kfree(diag_bridge[i].usb_buf_out);
-			kfree(diag_bridge[i].usb_read_ptr);
+			kfree(diag_bridge[i].buf_out);
+			kfree(diag_bridge[i].channel_read_ptr);
 			destroy_workqueue(diag_bridge[i].wq);
 			diag_bridge[i].enabled = 0;
 		}

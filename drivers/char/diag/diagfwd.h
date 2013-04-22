@@ -28,7 +28,7 @@ void process_lock_on_notify(struct diag_nrt_wake_lock *lock);
 void process_lock_on_read(struct diag_nrt_wake_lock *lock, int pkt_len);
 void process_lock_on_copy(struct diag_nrt_wake_lock *lock);
 void process_lock_on_copy_complete(struct diag_nrt_wake_lock *lock);
-void diag_usb_legacy_notifier(void *, unsigned, struct diag_request *);
+void diag_legacy_notifier(void *, unsigned, struct diag_request *);
 long diagchar_ioctl(struct file *, unsigned int, unsigned long);
 int diag_device_write(void *, int, struct diag_request *);
 int mask_request_validate(unsigned char mask_buf[]);
@@ -50,9 +50,14 @@ void diag_cmp_logging_modes_sdio_pipe(int old_mode, int new_mode);
 void diag_cmp_logging_modes_diagfwd_bridge(int old_mode, int new_mode);
 int diag_process_apps_pkt(unsigned char *buf, int len);
 /* State for diag forwarding */
-#ifdef CONFIG_DIAG_OVER_USB
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
 int diagfwd_connect(void);
 int diagfwd_disconnect(void);
+struct legacy_diag_ch *channel_diag_open(const char *name, void *priv,
+		void (*notify)(void *, unsigned, struct diag_request *));
+void channel_diag_close(struct legacy_diag_ch *ch);
+int channel_diag_read(struct legacy_diag_ch *ch, struct diag_request *d_req);
+int channel_diag_write(struct legacy_diag_ch *ch, struct diag_request *d_req);
 #endif
 extern int diag_debug_buf_idx;
 extern unsigned char diag_debug_buf[1024];

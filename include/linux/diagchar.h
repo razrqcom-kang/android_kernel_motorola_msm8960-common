@@ -28,6 +28,39 @@
 #define SOCKET_MODE			5
 #define CALLBACK_MODE			6
 #define MEMORY_DEVICE_MODE_NRT		7
+#define INTERNAL_MODE			8
+
+#define USB_MODE_NAME			"usb"
+#define MEMORY_DEVICE_MODE_NAME		"memory"
+#define NO_LOGGING_MODE_NAME		"none"
+#define UART_MODE_NAME			"uart"
+#define INTERNAL_MODE_NAME		"internal"
+
+#define USB_DIAG_CONNECT		0
+#define USB_DIAG_DISCONNECT		1
+#define USB_DIAG_WRITE_DONE		2
+#define USB_DIAG_READ_DONE		3
+#define CHANNEL_DIAG_CONNECT		USB_DIAG_CONNECT
+#define CHANNEL_DIAG_DISCONNECT		USB_DIAG_DISCONNECT
+#define CHANNEL_DIAG_WRITE_DONE		USB_DIAG_WRITE_DONE
+#define CHANNEL_DIAG_READ_DONE		USB_DIAG_READ_DONE
+
+struct diag_request {
+	char *buf;
+	int length;
+	int actual;
+	int status;
+	void *context;
+};
+
+struct legacy_diag_ch {
+	const char *name;
+	struct list_head list;
+	void (*notify)(void *priv, unsigned event, struct diag_request *d_req);
+	void *priv;
+	void *priv_channel;
+};
+
 /* different values that go in for diag_data_type */
 #define DATA_TYPE_EVENT         	0
 #define DATA_TYPE_F3            	1
@@ -50,6 +83,22 @@
 #define DIAG_IOCTL_DCI_CLEAR_LOGS	28
 #define DIAG_IOCTL_DCI_CLEAR_EVENTS	29
 #define DIAG_IOCTL_REMOTE_DEV		32
+
+/* Machine IDs */
+#define APQ8060_MACHINE_ID	86
+#define AO8960_MACHINE_ID	87
+#define MSM8660_MACHINE_ID	71
+#define MDM9615_MACHINE_ID	104
+#define APQ8064_MACHINE_ID	109
+#define MSM8930_MACHINE_ID	116
+#define MSM8630_MACHINE_ID	117
+#define MSM8230_MACHINE_ID	118
+#define APQ8030_MACHINE_ID	119
+#define MSM8627_MACHINE_ID	120
+#define MSM8227_MACHINE_ID	121
+#define MSM8660A_MACHINE_ID	122
+#define MSM8260A_MACHINE_ID	123
+#define MSM8974_MACHINE_ID	126
 
 /* PC Tools IDs */
 #define APQ8060_TOOLS_ID	4062

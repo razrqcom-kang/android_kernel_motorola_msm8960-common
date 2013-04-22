@@ -80,10 +80,10 @@ static ssize_t diag_dbgfs_read_status(struct file *file, char __user *ubuf,
 		driver->smd_dci[MODEM_DATA].in_busy_1,
 		driver->logging_mode);
 
-#ifdef CONFIG_DIAG_OVER_USB
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
 	ret += scnprintf(buf+ret, DEBUG_BUF_SIZE,
-		"usb_connected: %d\n",
-		driver->usb_connected);
+		"channel_connected: %d\n",
+		driver->channel_connected);
 #endif
 	ret = simple_read_from_buffer(ubuf, count, ppos, buf, ret);
 
@@ -317,7 +317,7 @@ static ssize_t diag_dbgfs_read_bridge(struct file *file, char __user *ubuf,
 			(unsigned int)diag_hsic[i].diag_hsic_write_pool,
 			diag_bridge[i].write_len,
 			diag_hsic[i].num_hsic_buf_tbl_entries,
-			diag_bridge[i].usb_connected,
+			diag_bridge[i].channel_connected,
 			work_pending(&(diag_bridge[i].diag_read_work)),
 			work_pending(&(diag_hsic[i].diag_read_hsic_work)),
 			work_pending(&(diag_bridge[i].usb_read_complete_work)));
