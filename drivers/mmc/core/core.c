@@ -1497,10 +1497,9 @@ void mmc_power_up(struct mmc_host *host)
 	host->ios.vdd = bit;
 	if (mmc_host_is_spi(host))
 		host->ios.chip_select = MMC_CS_HIGH;
-	else {
+	else
 		host->ios.chip_select = MMC_CS_DONTCARE;
-		host->ios.bus_mode = MMC_BUSMODE_OPENDRAIN;
-	}
+	host->ios.bus_mode = MMC_BUSMODE_PUSHPULL;
 	host->ios.power_mode = MMC_POWER_UP;
 	host->ios.bus_width = MMC_BUS_WIDTH_1;
 	host->ios.timing = MMC_TIMING_LEGACY;
@@ -1617,7 +1616,7 @@ int mmc_resume_bus(struct mmc_host *host)
 		host->bus_ops->resume(host);
 	}
 
-	if (host->bus_ops->detect && !host->bus_dead)
+	if (host->bus_ops && host->bus_ops->detect && !host->bus_dead)
 		host->bus_ops->detect(host);
 
 	mmc_bus_put(host);
@@ -2037,8 +2036,18 @@ int mmc_can_erase(struct mmc_card *card)
 }
 EXPORT_SYMBOL(mmc_can_erase);
 
+#define TOSHIBA_MANFID 0x11
 int mmc_can_trim(struct mmc_card *card)
 {
+	/*
+	 * Toshiba 24nm (eMMC v4.41) parts perform poorly when issued TRIM
+	 * commands because they do synchronous garbage collection.   Falling
+	 * back on normal erase commands works around this, since the part will
+	 * only do a logical remapping of the erased block.  This is resolved
+	 * on their 19nm (eMMC v4.5) parts.
+	 */
+	if (card->cid.manfid == TOSHIBA_MANFID && card->ext_csd.rev == 5)
+		return 0;
 	if (card->ext_csd.sec_feature_support & EXT_CSD_SEC_GB_CL_EN)
 		return 1;
 	return 0;
@@ -2378,8 +2387,14 @@ void mmc_rescan(struct work_struct *work)
 		container_of(work, struct mmc_host, detect.work);
 	bool extend_wakelock = false;
 
-	if (host->rescan_disable)
+	if (host->rescan_disable) {
+		/*
+		 * To make sure release detect_wake_lock,
+		 * should call wake_unlock here
+		 */
+		wake_unlock(&host->detect_wake_lock);
 		return;
+	}
 
 	mmc_bus_get(host);
 
@@ -2417,6 +2432,9 @@ void mmc_rescan(struct work_struct *work)
 		mmc_bus_put(host);
 		goto out;
 	}
+
+	/* Initialization should be done at 3.3 V I/O voltage. */
+	mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_330, 0);
 
 	/*
 	 * Only we can add a new handler, so it's safe to
@@ -2803,8 +2821,8 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 		}
 		host->rescan_disable = 1;
 		spin_unlock_irqrestore(&host->lock, flags);
-		if (cancel_delayed_work_sync(&host->detect))
-			wake_unlock(&host->detect_wake_lock);
+		cancel_delayed_work_sync(&host->detect);
+		wake_unlock(&host->detect_wake_lock);
 
 		if (!host->bus_ops || host->bus_ops->suspend)
 			break;

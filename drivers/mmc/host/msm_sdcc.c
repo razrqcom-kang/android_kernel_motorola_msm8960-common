@@ -792,10 +792,11 @@ static void msmsdcc_sps_complete_tlet(unsigned long data)
 	}
 
 	/* Unmap sg buffers */
-	if (!mrq->data->host_cookie)
+	if (host->sps.sg) {
 		dma_unmap_sg(mmc_dev(host->mmc), host->sps.sg,
 			     host->sps.num_ents, host->sps.dir);
-	host->sps.sg = NULL;
+		host->sps.sg = NULL;
+	}
 	host->sps.busy = 0;
 
 	if ((host->curr.got_dataend && (!host->curr.wait_for_auto_prog_done ||
@@ -1387,10 +1388,8 @@ msmsdcc_data_err(struct msmsdcc_host *host, struct mmc_data *data,
 				pr_err("%s: blksz %d, blocks %d\n", __func__,
 				       data->blksz, data->blocks);
 			} else {
-				pr_err("%s: CMD%d: Data timeout. DAT0 => %d\n",
-					 mmc_hostname(host->mmc), opcode,
-					 (readl_relaxed(host->base
-					 + MCI_TEST_INPUT) & 0x2) ? 1 : 0);
+				pr_err("%s: CMD%d: Data timeout\n",
+					 mmc_hostname(host->mmc), opcode);
 				msmsdcc_dump_sdcc_state(host);
 			}
 		}
@@ -2246,12 +2245,16 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	else
 		host->curr.req_tout_ms = MSM_MMC_REQ_TIMEOUT;
 	/*
-	 * Kick the software request timeout timer here with the timeout
-	 * value identified above
+	 * Kick the software request timeout timer here.
+	 * Timer expires in 0.5secs for CMD13
+	 * Timer expires in as set above for others
 	 */
-	mod_timer(&host->req_tout_timer,
-			(jiffies +
-			 msecs_to_jiffies(host->curr.req_tout_ms)));
+	if (mrq->cmd->opcode == MMC_SEND_STATUS)
+		mod_timer(&host->req_tout_timer, jiffies + HZ / 2);
+	else
+		mod_timer(&host->req_tout_timer,
+				(jiffies +
+				 msecs_to_jiffies(host->curr.req_tout_ms)));
 
 	host->curr.mrq = mrq;
 	if (mrq->sbc) {
@@ -2923,13 +2926,19 @@ static u32 msmsdcc_setup_pwr(struct msmsdcc_host *host, struct mmc_ios *ios)
 		pwr = MCI_PWR_OFF;
 		msmsdcc_cfg_mpm_sdiowakeup(host, SDC_DAT1_DISABLE);
 		/*
-		 * If VDD IO rail is always on, set low voltage for VDD
-		 * IO rail when slot is not in use (like when card is not
-		 * present or during system suspend).
+		 * Don't brown-out the uSD slot.  It makes some cards mad.
 		 */
-		msmsdcc_set_vdd_io_vol(host, VDD_IO_LOW, 0);
-		msmsdcc_update_io_pad_pwr_switch(host);
-		msmsdcc_setup_pins(host, false);
+		if (mmc->caps & MMC_CAP_NONREMOVABLE) {
+			/*
+			 * If VDD IO rail is always on, set low voltage for VDD
+			 * IO rail when slot is not in use (like when card is not
+			 * present or during system suspend).
+			 */
+			msmsdcc_set_vdd_io_vol(host, VDD_IO_LOW, 0);
+			msmsdcc_update_io_pad_pwr_switch(host);
+			msmsdcc_setup_pins(host, false);
+		} else
+			pr_debug("%s: not powering off\n", mmc_hostname(host->mmc));
 		/*
 		 * Reset the mask to prevent hitting any pending interrupts
 		 * after powering up the card again.
@@ -4273,20 +4282,29 @@ msmsdcc_slot_status(struct msmsdcc_host *host)
 {
 	int status;
 	unsigned int gpio_no = host->plat->status_gpio;
+	static unsigned int allocated;
 
-	status = gpio_request(gpio_no, "SD_HW_Detect");
-	if (status) {
-		pr_err("%s: %s: Failed to request GPIO %d\n",
-			mmc_hostname(host->mmc), __func__, gpio_no);
-	} else {
-		status = gpio_direction_input(gpio_no);
-		if (!status) {
-			status = gpio_get_value_cansleep(gpio_no);
-			if (host->plat->is_status_gpio_active_low)
-				status = !status;
+	if (!allocated) {
+		status = gpio_request(gpio_no, "SD_HW_Detect");
+		if (status) {
+			pr_err("%s: %s: Failed to request GPIO %d\n",
+				mmc_hostname(host->mmc), __func__, gpio_no);
+			goto out;
+		} else {
+			status = gpio_direction_input(gpio_no);
+			if (!status) {
+				pr_err("%s: %s: Failed to configure GPIO %d\n",
+					mmc_hostname(host->mmc), __func__, gpio_no);
+				goto out;
+			}
+			allocated = 1;
+			gpio_export(gpio_no, 0);
 		}
-		gpio_free(gpio_no);
 	}
+	status = !gpio_get_value_cansleep(gpio_no);
+	if (host->plat->is_status_gpio_active_low)
+		status = !status;
+out:
 	return status;
 }
 
@@ -6393,7 +6411,7 @@ msmsdcc_runtime_suspend(struct device *dev)
 		goto out;
 	}
 
-	pr_debug("%s: %s: start\n", mmc_hostname(mmc), __func__);
+	//pr_debug("%s: %s: start\n", mmc_hostname(mmc), __func__);
 	if (mmc) {
 		host->sdcc_suspending = 1;
 		mmc->suspend_task = current;
@@ -6494,6 +6512,8 @@ msmsdcc_runtime_resume(struct device *dev)
 
 static int msmsdcc_runtime_idle(struct device *dev)
 {
+// FIXME-HASH: this CONFIG doesn't exist, but it's this way in 3.0 kernel as well.
+#ifdef CONFIG_MMC_MSM_USE_RPM
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct msmsdcc_host *host = mmc_priv(mmc);
 
@@ -6502,7 +6522,7 @@ static int msmsdcc_runtime_idle(struct device *dev)
 
 	/* Idle timeout is not configurable for now */
 	pm_schedule_suspend(dev, host->idle_tout_ms);
-
+#endif
 	return -EAGAIN;
 }
 
