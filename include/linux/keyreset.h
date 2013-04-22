@@ -20,6 +20,7 @@
 #define KEYRESET_NAME "keyreset"
 
 struct keyreset_platform_data {
+	int delay;
 	int (*reset_fn)(void);
 	int down_time_ms;
 	int *keys_up;
