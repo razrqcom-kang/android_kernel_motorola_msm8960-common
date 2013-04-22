@@ -2189,6 +2189,14 @@ __acquires(mEp->lock)
 			list_entry(mEp->qh.queue.next,
 				   struct ci13xxx_req, queue);
 		list_del_init(&mReq->queue);
+		if (mReq->map) {
+			dma_unmap_single(mEp->device, mReq->req.dma,
+					 mReq->req.length,
+					 mEp->dir ?
+					 DMA_TO_DEVICE : DMA_FROM_DEVICE);
+			mReq->req.dma = 0;
+			mReq->map = 0;
+		}
 
 		/* MSM Specific: Clear end point proprietary register */
 		if (CI13XX_REQ_VENDOR_ID(mReq->req.udc_priv) == MSM_VENDOR_ID) {
@@ -2939,6 +2947,7 @@ static int ep_disable(struct usb_ep *ep)
 
 	mEp->desc = NULL;
 	mEp->ep.desc = NULL;
+	mEp->ep.maxpacket = CTRL_PAYLOAD_MAX;
 
 	spin_unlock_irqrestore(mEp->lock, flags);
 	return retval;
@@ -3300,8 +3309,12 @@ static int ci13xxx_vbus_session(struct usb_gadget *_gadget, int is_active)
 
 	spin_lock_irqsave(udc->lock, flags);
 	udc->vbus_active = is_active;
-	if (udc->driver)
+	if (udc->driver) {
 		gadget_ready = 1;
+		/* Indicate cable connection status to gadget */
+		if (udc->driver->cable_connect)
+			udc->driver->cable_connect(&udc->gadget, is_active);
+	}
 	spin_unlock_irqrestore(udc->lock, flags);
 
 	if (gadget_ready) {

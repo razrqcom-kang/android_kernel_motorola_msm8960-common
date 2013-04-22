@@ -427,6 +427,9 @@ static void rndis_response_complete(struct usb_ep *ep, struct usb_request *req)
 	switch (status) {
 	case -ECONNRESET:
 	case -ESHUTDOWN:
+		if(WARN_ON(!rndis))
+			return;
+
 		/* connection gone */
 		atomic_set(&rndis->notify_count, 0);
 		break;
@@ -459,6 +462,12 @@ static void rndis_command_complete(struct usb_ep *ep, struct usb_request *req)
 	struct usb_composite_dev	*cdev;
 	int				status;
 	rndis_init_msg_type		*buf;
+
+	if (req->status) {
+		pr_err("RNDIS command ignored. Request status = %d\n",
+			req->status);
+		return;
+	}
 
 	if (!rndis->port.func.config || !rndis->port.func.config->cdev)
 		return;
