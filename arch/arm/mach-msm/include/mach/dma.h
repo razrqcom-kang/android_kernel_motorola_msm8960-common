@@ -179,6 +179,16 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 #define DMOV_CE_OUT_CHAN       1
 #define DMOV_CE_OUT_CRCI       3
 
+/* Motorola */
+#define DMOV_WHISPER_TX_CHAN   4
+#define DMOV_WHISPER_TX_CRCI_GSBI12   15
+#define DMOV_WHISPER_TX_CRCI_GSBI4    8
+
+#define DMOV_WHISPER_RX_CHAN   5
+#define DMOV_WHISPER_RX_CRCI_GSBI12   14
+#define DMOV_WHISPER_RX_CRCI_GSBI4    7
+/* END: Motorola */
+
 #define DMOV_TSIF_CHAN         2
 #define DMOV_TSIF_CRCI         11
 

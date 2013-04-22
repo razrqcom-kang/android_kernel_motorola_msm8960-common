@@ -14,6 +14,8 @@
  * SPI driver for Qualcomm MSM platforms.
  */
 
+#ifndef _MSM_SPI_H
+#define _MSM_SPI_H
 struct msm_spi_platform_data {
 	u32 max_clock_speed;
 	int (*gpio_config)(void);
@@ -23,3 +25,4 @@ struct msm_spi_platform_data {
 	uint32_t pm_lat;
 	uint32_t infinite_mode;
 };
+#endif
