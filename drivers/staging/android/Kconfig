@@ -25,6 +25,10 @@ config ANDROID_LOGGER
 	tristate "Android log driver"
 	default n
 
+config LARGE_ANDROID_LOGBUFS
+	tristate "Android large log buffers to hold vendor spam"
+	default n
+
 config ANDROID_PERSISTENT_RAM
 	bool
 	depends on HAVE_MEMBLOCK
