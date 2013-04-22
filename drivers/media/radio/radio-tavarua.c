@@ -3243,7 +3243,7 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 			 * queue the READY event from the host side
 			 * in case of FM off
 			 */
-			tavarua_q_event(radio, TAVARUA_EVT_RADIO_DISABLED);
+			tavarua_q_event(radio, TAVARUA_EVT_RADIO_READY);
 
 			FMDBG("%s, Disable All Interrupts\n", __func__);
 			/* disable irq */
