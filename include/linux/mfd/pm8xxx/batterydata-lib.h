@@ -102,6 +102,10 @@ struct bms_battery_data {
 	int			default_rbatt_mohm;
 	int			delta_rbatt_mohm;
 	int			rbatt_capacitive_mohm;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	unsigned int			rbatt;
+	unsigned int			k_factor;
+#endif
 };
 
 #if defined(CONFIG_PM8921_BMS) || \

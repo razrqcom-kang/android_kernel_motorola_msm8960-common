@@ -37,6 +37,19 @@ struct pm8xxx_irq_platform_data {
 
 struct pm_irq_chip;
 
+#ifdef CONFIG_MSM_SHOW_RESUME_IRQ
+extern int msm_show_resume_irq_mask;
+static inline int show_resume_irq(void)
+{
+	return msm_show_resume_irq_mask;
+}
+#else
+static inline int show_resume_irq(void)
+{
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_MFD_PM8XXX_IRQ
 int pm8xxx_get_irq_stat(struct pm_irq_chip *chip, int irq);
 struct pm_irq_chip *pm8xxx_irq_init(struct device *dev,

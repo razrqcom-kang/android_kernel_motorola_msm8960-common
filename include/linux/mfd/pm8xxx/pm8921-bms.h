@@ -14,10 +14,12 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
+#include <linux/types.h>
 #include <linux/mfd/pm8xxx/batterydata-lib.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
 
+#define START_METER_OFFSET_SOC 5
 
 struct pm8xxx_bms_core_data {
 	unsigned int	batt_temp_channel;
@@ -35,6 +37,8 @@ struct pm8xxx_bms_core_data {
  *			calculated or the peak system current (mA)
  * @v_cutoff:		the loaded voltage at which the battery
  *			is considered empty(mV)
+ * @get_batt_info:      a board specific function to return battery data If NULL
+ *                      default palladium data will be used to meter the battery
  * @enable_fcc_learning:	if set the driver will learn full charge
  *				capacity of the battery upon end of charge
  * @normal_voltage_calc_ms:	The period of soc calculation in ms when battery
@@ -61,6 +65,10 @@ struct pm8921_bms_platform_data {
 	int				r_sense_uohm;
 	unsigned int			i_test;
 	unsigned int			v_cutoff;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	int64_t (*get_batt_info) (int64_t battery_id,
+				  struct bms_battery_data *data);
+#endif
 	unsigned int			max_voltage_uv;
 	unsigned int			rconn_mohm;
 	unsigned int			alarm_low_mv;
@@ -124,6 +132,17 @@ int pm8921_bms_get_percent_charge(void);
 int pm8921_bms_get_fcc(void);
 
 /**
+ * pm8921_bms_get_aged_capacity - returns percentage of full battery capacity taking
+                                  aging into acccount
+ *
+ * @result:	The pointer where the percentage will be updated.
+ *
+ * RETURNS:	Error code if there was a problem reading, Zero otherwise
+ *              The result won't be updated in case of an error.
+ */
+int pm8921_bms_get_aged_capacity(int *result);
+
+/**
  * pm8921_bms_charging_began - function to notify the bms driver that charging
  *				has started. Used by the bms driver to keep
  *				track of chargecycles
@@ -180,6 +199,32 @@ void pm8921_bms_battery_removed(void);
  *			for reporting soc.
  */
 void pm8921_bms_battery_inserted(void);
+
+#ifdef CONFIG_PM8921_FLOAT_CHARGE
+/**
+ * pm8921_bms_charging_full - function to notify the bms driver that charging
+ *				is Full.
+ */
+void pm8921_bms_charging_full(void);
+/**
+ * pm8921_bms_no_external_accy - function to notify the bms driver that No Accy
+ *				is attached.
+ */
+void pm8921_bms_no_external_accy(void);
+#else
+static inline void pm8921_bms_charging_full(void)
+{
+}
+#endif
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+/**
+ * pm8921_bms_voltage_based_capacity - function toadjust meter offset
+ */
+void pm8921_bms_voltage_based_capacity(int batt_mvolt,
+				       int batt_mcurr,
+				       int batt_temp);
+#endif
+
 #else
 static inline int pm8921_bms_get_vsense_avg(int *result)
 {
@@ -194,6 +239,10 @@ static inline int pm8921_bms_get_percent_charge(void)
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_fcc(void)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_aged_capacity(int *result)
 {
 	return -ENXIO;
 }
@@ -225,6 +274,9 @@ static inline int pm8921_bms_cc_uah(int *cc_uah)
 static inline int pm8921_bms_get_current_max(void)
 {
 	return -ENXIO;
+}
+static inline void pm8921_bms_no_external_accy(void)
+{
 }
 static inline void pm8921_bms_battery_removed(void) {}
 static inline void pm8921_bms_battery_inserted(void) {}

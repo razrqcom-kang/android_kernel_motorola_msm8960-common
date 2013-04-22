@@ -158,6 +158,7 @@ struct wcd9xxx_pdata {
 	struct wcd9xxx_micbias_setting micbias;
 	struct wcd9xxx_ocp_setting ocp;
 	struct wcd9xxx_regulator regulator[MAX_REGULATOR];
+	int hs_detect_gpio_enable;
 };
 
 #endif
