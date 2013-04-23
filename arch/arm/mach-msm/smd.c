@@ -36,6 +36,7 @@
 #include <linux/notifier.h>
 #include <linux/sort.h>
 #include <linux/suspend.h>
+#include <linux/syscore_ops.h>
 #include <mach/msm_smd.h>
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
@@ -3496,6 +3497,44 @@ smem_areas_alloc_fail:
 	return err_ret;
 }
 
+void share_mmi_unit_info(struct platform_device *pdev)
+{
+	struct mmi_unit_info_v1 *smui;
+	void *pdata;
+
+	pdata = pdev->dev.platform_data;
+
+	if (!pdata) {
+		pr_err("%s: platform data not initialized\n",
+			__func__);
+		return;
+	}
+
+	SMD_INFO("%s: mmi_unit_info version = %d and size = %d\n",
+		__func__,
+		((struct mmi_unit_info_v1 *)pdata)->version,
+		sizeof(struct mmi_unit_info_v1));
+
+	smui = (struct mmi_unit_info_v1 *) smem_alloc2(SMEM_UNIT_INFO,
+		sizeof(struct mmi_unit_info_v1));
+
+	if (!smui) {
+		pr_err("%s: failed to allocate mmi_unit_info in SMEM\n",
+			__func__);
+		return;
+	}
+
+	SMD_INFO("%s: allocated mmi_unit_info (0x%p) in SMEM\n",
+		__func__, (void *)smui);
+
+	memcpy(smui, pdata, sizeof(struct mmi_unit_info_v1));
+
+	if (smui->version != 1) {
+		pr_err("%s: unexpected unit_info version %d in SMEM\n",
+			__func__, smui->version);
+	}
+}
+
 static int __devinit msm_smd_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -3542,6 +3581,8 @@ static int __devinit msm_smd_probe(struct platform_device *pdev)
 	smd_alloc_loopback_channel();
 	smsm_irq_handler(0, 0);
 	tasklet_schedule(&smd_fake_irq_tasklet);
+
+	share_mmi_unit_info(pdev);
 
 	return 0;
 }
@@ -3601,6 +3642,35 @@ static struct platform_driver msm_smd_driver = {
 	},
 };
 
+static struct delayed_work resume_work;
+static int smd_suspend(void)
+{
+	pr_info("%s: enabling power logging\n", __func__);
+	msm_smd_debug_mask = MSM_SMx_POWER_INFO;
+	return 0;
+}
+
+static void smd_resume(void)
+{
+	/*
+	 * if we are the wakeup source, this gets called before we process
+	 * any interrupts, so delay turning off the logging for a short time
+	 * so that the logs are enabled when we process any wakeup interrupts
+	 */
+	schedule_delayed_work(&resume_work, msecs_to_jiffies(500));
+}
+
+static struct syscore_ops smd_syscore_ops = {
+	.suspend = smd_suspend,
+	.resume = smd_resume,
+};
+
+static void resume_work_func(struct work_struct *work)
+{
+	pr_info("%s: disabling power logging\n", __func__);
+	msm_smd_debug_mask = 0;
+}
+
 int __init msm_smd_init(void)
 {
 	static bool registered;
@@ -3610,6 +3680,9 @@ int __init msm_smd_init(void)
 		return 0;
 
 	registered = true;
+	INIT_DELAYED_WORK(&resume_work, resume_work_func);
+	register_syscore_ops(&smd_syscore_ops);
+
 	rc = remote_spin_lock_init(&remote_spinlock, SMEM_SPINLOCK_SMEM_ALLOC);
 	if (rc) {
 		pr_err("%s: remote spinlock init failed %d\n", __func__, rc);

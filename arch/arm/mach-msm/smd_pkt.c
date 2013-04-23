@@ -915,9 +915,11 @@ int smd_pkt_open(struct inode *inode, struct file *file)
 		}
 
 		if (r < 0) {
+			smd_pkt_devp->ch = 0;
 			pr_err("%s: wait on smd_pkt_dev id:%d OPEN event failed"
 			       " rc:%d\n", __func__, smd_pkt_devp->i, r);
 		} else if (!smd_pkt_devp->is_open) {
+			smd_pkt_devp->ch = 0;
 			pr_err("%s: Invalid OPEN event on smd_pkt_dev id:%d\n",
 				__func__, smd_pkt_devp->i);
 			r = -ENODEV;
