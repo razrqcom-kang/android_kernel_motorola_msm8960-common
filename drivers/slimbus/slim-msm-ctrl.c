@@ -920,6 +920,7 @@ static int msm_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 				!timeout) {
 			dev->reconf_busy = false;
 			dev_err(dev->dev, "clock pause failed");
+			dev->wr_comp = NULL;
 			mutex_unlock(&dev->tx_lock);
 			return -ETIMEDOUT;
 		}
@@ -938,6 +939,8 @@ static int msm_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 		dev->wr_comp = NULL;
 	}
 
+	// FIXME-HASH: This doesn't look useful
+	// dev->wr_comp = NULL;
 	mutex_unlock(&dev->tx_lock);
 	if (msgv >= 0)
 		msm_slim_put_ctrl(dev);
