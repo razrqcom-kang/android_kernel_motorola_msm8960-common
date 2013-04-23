@@ -1,5 +1,12 @@
 CFLAGS_scm.o :=$(call as-instr,.arch_extension sec,-DREQUIRES_SEC=1)
 
+ifdef CONFIG_FUNCTION_TRACER
+CFLAGS_REMOVE_timer.o = -pg
+CFLAGS_REMOVE_clock.o = -pg
+CFLAGS_REMOVE_acpuclock.o = -pg
+CFLAGS_REMOVE_scm.o = -pg
+endif
+
 obj-y += io.o dma.o memory.o
 ifndef CONFIG_ARM_ARCH_TIMER
 obj-y += timer.o
@@ -206,6 +213,8 @@ ifdef CONFIG_MSM_SUBSYSTEM_RESTART
 	obj-y += subsystem_notif.o
 	obj-y += subsystem_restart.o
 	obj-y += ramdump.o
+	obj-y += modem_coredump.o
+	obj-y += wcnss_coredump.o
 	obj-$(CONFIG_ARCH_MSM8X60) += modem-8660.o lpass-8660.o
 endif
 obj-$(CONFIG_MSM_SYSMON_COMM) += sysmon.o
@@ -280,6 +289,23 @@ board-8064-all-objs += board-8064.o board-8064-pmic.o board-8064-storage.o board
 obj-$(CONFIG_MACH_MSM8960_CDP) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_MTP) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_FLUID) += board-8960-all.o board-8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_MMI) += \
+	board-mmi-common.o \
+	board-mmi-display.o \
+	board-mmi-gpiomux.o \
+	board-mmi-storage.o \
+	board-mmi.o \
+	board-mmi-regulator.o \
+	board-mmi-sensors.o \
+	board-mmi-keypad.o \
+	board-mmi-pmic.o \
+	board-mmi-touch.o \
+	board-mmi-cyttsp3.o \
+	board-mmi-atmxt.o \
+	board-mmi-vibrator.o \
+	board-mmi-melfas-touch.o \
+	board-mmi-bms-batterydata.o \
+	board-mmi-h2w.o
 obj-$(CONFIG_MACH_MSM8930_CDP) += board-8930-all.o board-8930-regulator-pm8038.o board-8930-regulator-pm8917.o
 obj-$(CONFIG_MACH_MSM8930_MTP) += board-8930-all.o board-8930-regulator-pm8038.o board-8930-regulator-pm8917.o
 obj-$(CONFIG_MACH_MSM8930_FLUID) += board-8930-all.o board-8930-regulator-pm8038.o board-8930-regulator-pm8917.o
@@ -393,3 +419,6 @@ ifdef CONFIG_MSM_CPR
 obj-$(CONFIG_DEBUG_FS) += msm_cpr-debug.o
 endif
 obj-$(CONFIG_MSM_CPU_PWRCTL) +=  msm_cpu_pwrctl.o
+obj-$(CONFIG_PM_DEBUG) += pm_debug.o
+obj-$(CONFIG_HOB_SHARED_RAM_MMI) += board-mmi_hob_ram_mmap.o
+
