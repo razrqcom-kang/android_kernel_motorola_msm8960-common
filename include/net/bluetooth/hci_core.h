@@ -639,7 +639,7 @@ static inline void hci_conn_put(struct hci_conn *conn)
 			if (conn->state == BT_CONNECTED) {
 				timeo = msecs_to_jiffies(conn->disc_timeout);
 				if (!conn->out)
-					timeo *= 4;
+					timeo *= 2;
 			} else
 				timeo = msecs_to_jiffies(10);
 		} else
@@ -1056,8 +1056,8 @@ int mgmt_auth_failed(u16 index, bdaddr_t *bdaddr, u8 status);
 int mgmt_set_local_name_complete(u16 index, u8 *name, u8 status);
 int mgmt_read_local_oob_data_reply_complete(u16 index, u8 *hash, u8 *randomizer,
 								u8 status);
-int mgmt_device_found(u16 index, bdaddr_t *bdaddr, u8 type, u8 le,
-				u8 *dev_class, s8 rssi, u8 eir_len, u8 *eir);
+int mgmt_device_found(u16 index, bdaddr_t *bdaddr, u8 link_type, u8 addr_type,
+			u8 le, u8 *dev_class, s8 rssi, u8 eir_len, u8 *eir);
 void mgmt_read_rssi_complete(u16 index, s8 rssi, bdaddr_t *bdaddr,
 				u16 handle, u8 status);
 int mgmt_remote_name(u16 index, bdaddr_t *bdaddr, u8 status, u8 *name);
