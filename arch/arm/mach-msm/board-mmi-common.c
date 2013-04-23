@@ -121,7 +121,9 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_PMEM_SIZE              0x4600000 /* 70 Mbytes */
 #define MSM_LIQUID_PMEM_SIZE       0x4000000 /* 64 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE    0x4000000 /* 64 Mbytes */
-#define MSM_RAM_CONSOLE_SIZE       128 * SZ_1K
+
+#define MMI_RAM_CONSOLE_START      0xbff00000
+#define MMI_RAM_CONSOLE_SIZE       (SZ_1M)   /* was 128 * SZ_1K */
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #define HOLE_SIZE                  0x20000
@@ -473,13 +475,6 @@ static void __init size_pmem_devices(void)
 static void __init reserve_memory_for(struct android_pmem_platform_data *p)
 {
 	msm8960_reserve_table[p->memory_type].size += p->size;
-}
-
-static void __init reserve_ram_console_memory(void)
-{
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	msm8960_reserve_table[MEMTYPE_EBI1].size += MSM_RAM_CONSOLE_SIZE;
-#endif
 }
 
 static int msm8960_paddr_to_memtype(unsigned int paddr)
@@ -963,8 +958,6 @@ static void __init msm8960_calculate_reserve_sizes(void)
 	reserve_mdp_memory();
 	reserve_rtb_memory();
 	reserve_cache_dump_memory();
-	reserve_ram_console_memory();
-
 #ifdef CONFIG_ANDROID_PMEM
 	reserve_memory_for(&android_pmem_audio_pdata);
 #endif
@@ -1301,12 +1294,10 @@ void __init msm8960_allocate_memory_regions(void)
 {
 	unsigned long size;
 
+	msm8960_allocate_fb_region();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-	size = MSM_RAM_CONSOLE_SIZE;
-	/* kludge the offset to the end of the EBI1 pool */
-	ram_console_resource[0].start =
-		(msm8960_reserve_table[MEMTYPE_EBI1].start +
-		 msm8960_reserve_table[MEMTYPE_EBI1].size) - size;
+	size = MMI_RAM_CONSOLE_SIZE;
+	ram_console_resource[0].start = MMI_RAM_CONSOLE_START;
 	ram_console_resource[0].end = ram_console_resource[0].start + size - 1;
 	pr_info("allocating %lu bytes at %p for RAM console\n",
 			size, (void *)ram_console_resource[0].start);
