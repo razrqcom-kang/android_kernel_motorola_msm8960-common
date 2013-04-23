@@ -36,6 +36,7 @@
 #include <mach/subsystem_restart.h>
 
 #include "smd_private.h"
+#include "restart.h"
 
 struct subsys_soc_restart_order {
 	const char * const *subsystem_list;
@@ -208,6 +209,9 @@ module_param(max_restarts, int, 0644);
 static long max_history_time = 3600;
 module_param(max_history_time, long, 0644);
 
+static int modem_restart_count = 0;
+module_param(modem_restart_count, int, 0644);
+
 static void do_epoch_check(struct subsys_device *dev)
 {
 	int n = 0;
@@ -260,6 +264,7 @@ static void do_epoch_check(struct subsys_device *dev)
 			panic("Subsystems have crashed %d times in less than "\
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
+			BUG();
 		}
 	}
 
@@ -297,8 +302,9 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
 	if (dev->desc->shutdown(dev->desc) < 0) {
-		panic("subsys-restart: [%p]: Failed to shutdown %s!",
+		pr_err("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
+		BUG();
 	}
 }
 
@@ -317,7 +323,8 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 
 	pr_info("[%p]: Powering up %s\n", current, name);
 	if (dev->desc->powerup(dev->desc) < 0) {
-		panic("[%p]: Failed to powerup %s!", current, name);
+		pr_err("[%p]: Failed to powerup %s!", current, name);
+		BUG();
 	}
 }
 
@@ -371,8 +378,9 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	 * out, since a subsystem died in its powerup sequence.
 	 */
 	if (!mutex_trylock(powerup_lock)) {
-		panic("%s[%p]: Subsystem died during powerup!",
+		pr_err("%s[%p]: Subsystem died during powerup!",
 						__func__, current);
+		BUG();
 	}
 
 	do_epoch_check(dev);
@@ -462,6 +470,18 @@ int subsystem_restart_dev(struct subsys_device *dev)
 	pr_info("Restart sequence requested for %s, restart_level = %d.\n",
 		name, restart_level);
 
+#ifdef TEMP_BP_APR_NOTIF
+	if (!strncmp("modem", subsys_name, strnlen("modem",
+		SUBSYS_NAME_MAX_LENGTH))) {
+		pr_info("BP panic notify enabled\n");
+		set_in_bp_panic();
+	}
+#endif
+
+	/* Increase restart count, later AP RIL can know the system
+	ever meet BP silent reboot, or NOT */
+	modem_restart_count++;
+
 	switch (restart_level) {
 
 	case RESET_SUBSYS_COUPLED:
@@ -469,10 +489,12 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		__subsystem_restart_dev(dev);
 		break;
 	case RESET_SOC:
-		panic("subsys-restart: Resetting the SoC - %s crashed.", name);
+		pr_err("subsys-restart: Resetting the SoC - %s crashed.", name);
+		BUG();
 		break;
 	default:
-		panic("subsys-restart: Unknown restart level!\n");
+		pr_err("subsys-restart: Unknown restart level!\n");
+		BUG();
 		break;
 	}
 
@@ -598,7 +620,7 @@ static int __init ssr_init_soc_restart_orders(void)
 
 static int __init subsys_restart_init(void)
 {
-	restart_level = RESET_SOC;
+	restart_level = RESET_SUBSYS_INDEPENDENT;
 
 	ssr_wq = alloc_workqueue("ssr_wq", WQ_CPU_INTENSIVE, 0);
 	if (!ssr_wq)
