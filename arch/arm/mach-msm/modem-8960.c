@@ -28,16 +28,26 @@
 #include <mach/subsystem_notif.h>
 #include <mach/socinfo.h>
 #include <mach/msm_smsm.h>
+#include <mach/msm_xo.h>
 
 #include "smd_private.h"
 #include "modem_notifier.h"
 #include "ramdump.h"
+#include "modem_coredump.h"
 
 static int crash_shutdown;
+struct msm_xo_voter *xo1;
+struct msm_xo_voter *xo2;
 
 static struct subsys_device *modem_8960_dev;
 
 #define MAX_SSR_REASON_LEN 81U
+#define Q6_FW_WDOG_ENABLE		0x08882024
+#define Q6_SW_WDOG_ENABLE		0x08982024
+#define SMSM_SUBSYS2AP_STATUS		0x00008000
+
+static int no_wdog_chk;
+module_param(no_wdog_chk, int, S_IRUGO | S_IWUSR);
 
 static void log_modem_sfr(void)
 {
@@ -81,9 +91,6 @@ static void smsm_state_cb(void *data, uint32_t old_state, uint32_t new_state)
 	}
 }
 
-#define Q6_FW_WDOG_ENABLE		0x08882024
-#define Q6_SW_WDOG_ENABLE		0x08982024
-
 static int modem_shutdown(const struct subsys_desc *subsys)
 {
 	void __iomem *q6_fw_wdog_addr;
@@ -102,6 +109,9 @@ static int modem_shutdown(const struct subsys_desc *subsys)
 		iounmap(q6_fw_wdog_addr);
 		return -ENOMEM;
 	}
+
+	msm_xo_mode_vote(xo1, MSM_XO_MODE_ON);
+	msm_xo_mode_vote(xo2, MSM_XO_MODE_ON);
 
 	writel_relaxed(0x0, q6_fw_wdog_addr);
 	writel_relaxed(0x0, q6_sw_wdog_addr);
@@ -125,6 +135,8 @@ static int modem_powerup(const struct subsys_desc *subsys)
 	pil_force_boot("modem");
 	enable_irq(Q6FW_WDOG_EXPIRED_IRQ);
 	enable_irq(Q6SW_WDOG_EXPIRED_IRQ);
+	msm_xo_mode_vote(xo1, MSM_XO_MODE_OFF);
+	msm_xo_mode_vote(xo2, MSM_XO_MODE_OFF);
 	return 0;
 }
 
@@ -136,7 +148,7 @@ void modem_crash_shutdown(const struct subsys_desc *subsys)
 
 /* FIXME: Get address, size from PIL */
 static struct ramdump_segment modemsw_segments[] = {
-	{0x89000000, 0x8D400000 - 0x89000000},
+	{0x89000000, 0x8D100000 - 0x89000000},
 };
 
 static struct ramdump_segment modemfw_segments[] = {
@@ -150,11 +162,17 @@ static struct ramdump_segment smem_segments[] = {
 static void *modemfw_ramdump_dev;
 static void *modemsw_ramdump_dev;
 static void *smem_ramdump_dev;
+static void *modem_coredump_dev;
 
 static int modem_ramdump(int enable, const struct subsys_desc *crashed_subsys)
 {
 	int ret = 0;
-
+	ret = do_modem_coredump(modem_coredump_dev);
+	if (ret < 0) {
+		/* Continue with ramdump even coredump failure*/
+		pr_err("Unable to dump modem coredump (rc = %d).\n",
+			ret);
+	}
 	if (enable) {
 		ret = do_ramdump(modemsw_ramdump_dev, modemsw_segments,
 			ARRAY_SIZE(modemsw_segments));
@@ -264,6 +282,18 @@ static int __init modem_8960_init(void)
 	ret = smsm_state_cb_register(SMSM_MODEM_STATE, SMSM_RESET,
 		smsm_state_cb, 0);
 
+	xo1 = msm_xo_get(MSM_XO_TCXO_A0, "modem-8960");
+	if (IS_ERR(xo1)) {
+		ret = PTR_ERR(xo1);
+		goto out;
+	}
+
+	xo2 = msm_xo_get(MSM_XO_TCXO_A1, "modem-8960");
+	if (IS_ERR(xo2)) {
+		ret = PTR_ERR(xo2);
+		goto out;
+	}
+
 	if (ret < 0)
 		pr_err("%s: Unable to register SMSM callback! (%d)\n",
 				__func__, ret);
@@ -317,6 +347,15 @@ static int __init modem_8960_init(void)
 
 	if (!smem_ramdump_dev) {
 		pr_err("%s: Unable to create smem ramdump device. (%d)\n",
+				__func__, -ENOMEM);
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	modem_coredump_dev = create_modem_coredump_device("modem");
+
+	if (!modem_coredump_dev) {
+		pr_err("%s: Unable to create modem coredump device. (%d)\n",
 				__func__, -ENOMEM);
 		ret = -ENOMEM;
 		goto out;
