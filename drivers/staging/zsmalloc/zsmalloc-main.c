@@ -355,6 +355,7 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 {
 	int i, error;
 	struct page *first_page = NULL;
+	struct page *page = NULL, *prev_page = NULL;
 
 	/*
 	 * Allocate individual pages and link them together as:
@@ -369,8 +370,6 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 	 */
 	error = -ENOMEM;
 	for (i = 0; i < class->zspage_order; i++) {
-		struct page *page, *prev_page;
-
 		page = alloc_page(flags);
 		if (!page)
 			goto cleanup;
