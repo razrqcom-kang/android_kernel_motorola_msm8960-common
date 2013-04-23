@@ -159,6 +159,7 @@ static inline int which_bucket(unsigned int duration)
  * to be, the higher this multiplier, and thus the higher
  * the barrier to go to an expensive C state.
  */
+#ifndef CONFIG_MACH_MSM8960_MMI
 static inline int performance_multiplier(void)
 {
 	int mult = 1;
@@ -177,6 +178,7 @@ static inline int performance_multiplier(void)
 
 	return mult;
 }
+#endif
 
 static DEFINE_PER_CPU(struct menu_device, menu_devices);
 
@@ -258,7 +260,11 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 
 	data->bucket = which_bucket(data->expected_us);
 
+#ifndef CONFIG_MACH_MSM8960_MMI
 	multiplier = performance_multiplier();
+#else
+	multiplier = 1;
+#endif
 
 	/*
 	 * if the correction factor is 0 (eg first time init or cpu hotplug
