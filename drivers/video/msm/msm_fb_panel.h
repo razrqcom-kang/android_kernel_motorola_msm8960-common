@@ -137,6 +137,9 @@ struct mipi_panel_info {
 	char no_max_pkt_size;
 	/* Clock required during LP commands */
 	char force_clk_lane_hs;
+#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
+	struct mutex panel_mutex;
+#endif
 };
 
 enum lvds_mode {
@@ -170,6 +173,8 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 frame_rate;
 	__u32 frame_interval;
+	__u32 physical_width_mm;
+	__u32 physical_height_mm;
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -191,12 +196,15 @@ struct msm_fb_panel_data {
 	void (*set_vsync_notifier) (msm_fb_vsync_handler_type, void *arg);
 	void (*set_backlight) (struct msm_fb_data_type *);
 	int (*get_backlight_on_status) (void);
+	void (*set_backlight_curve) (struct msm_fb_data_type *);
 
 	/* function entry chain */
 	int (*on) (struct platform_device *pdev);
 	int (*off) (struct platform_device *pdev);
 	int (*late_init) (struct platform_device *pdev);
 	int (*early_off) (struct platform_device *pdev);
+	int (*panel_on) (struct platform_device *pdev);
+	int (*panel_off) (struct platform_device *pdev);
 	int (*power_ctrl) (boolean enable);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
@@ -211,6 +219,7 @@ struct platform_device *msm_fb_device_alloc(struct msm_fb_panel_data *pdata,
 						u32 type, u32 id);
 int panel_next_on(struct platform_device *pdev);
 int panel_next_off(struct platform_device *pdev);
+int panel_next_panel_on(struct platform_device *pdev);
 int panel_next_fps_level_change(struct platform_device *pdev,
 					u32 fps_level);
 int panel_next_late_init(struct platform_device *pdev);
