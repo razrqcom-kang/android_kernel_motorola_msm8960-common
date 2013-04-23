@@ -96,6 +96,11 @@
 #define MSM_GSBI12_QUP_PHYS	(MSM_GSBI12_PHYS + 0x20000)
 #define MSM_QUP_SIZE		SZ_4K
 
+#define MSM_GSBI10_I2C_SDA	73
+#define MSM_GSBI10_I2C_SCL	74
+#define MSM_GSBI12_I2C_SDA	44
+#define MSM_GSBI12_I2C_SCL	45
+
 #define MSM_PMIC1_SSBI_CMD_PHYS	0x00500000
 #define MSM_PMIC2_SSBI_CMD_PHYS	0x00C00000
 #define MSM_PMIC_SSBI_SIZE	SZ_4K
@@ -1635,8 +1640,8 @@ struct platform_device msm_device_bam_dmux = {
 };
 
 static struct msm_watchdog_pdata msm_watchdog_pdata = {
-	.pet_time = 10000,
-	.bark_time = 11000,
+	.pet_time = 20000,
+	.bark_time = 22000,
 	.has_secure = true,
 	.base = MSM_TMR0_BASE + WDT0_OFFSET,
 };
@@ -1724,6 +1729,18 @@ static struct resource resources_qup_i2c_gsbi4[] = {
 		.start	= GSBI4_QUP_IRQ,
 		.end	= GSBI4_QUP_IRQ,
 		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name	= "i2c_clk",
+		.start	= MSM_GSBI12_I2C_SCL,
+		.end	= MSM_GSBI12_I2C_SCL,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "i2c_sda",
+		.start	= MSM_GSBI12_I2C_SDA,
+		.end	= MSM_GSBI12_I2C_SDA,
+		.flags	= IORESOURCE_IO,
 	},
 };
 
@@ -1837,6 +1854,18 @@ static struct resource resources_qup_i2c_gsbi10[] = {
 		.end	= GSBI10_QUP_IRQ,
 		.flags	= IORESOURCE_IRQ,
 	},
+	{
+		.name	= "i2c_clk",
+		.start	= MSM_GSBI10_I2C_SCL,
+		.end	= MSM_GSBI10_I2C_SCL,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "i2c_sda",
+		.start	= MSM_GSBI10_I2C_SDA,
+		.end	= MSM_GSBI10_I2C_SDA,
+		.flags	= IORESOURCE_IO,
+	},
 };
 
 struct platform_device msm8960_device_qup_i2c_gsbi10 = {
@@ -1864,6 +1893,18 @@ static struct resource resources_qup_i2c_gsbi12[] = {
 		.start	= GSBI12_QUP_IRQ,
 		.end	= GSBI12_QUP_IRQ,
 		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name	= "i2c_clk",
+		.start	= MSM_GSBI12_I2C_SCL,
+		.end	= MSM_GSBI12_I2C_SCL,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "i2c_sda",
+		.start	= MSM_GSBI12_I2C_SDA,
+		.end	= MSM_GSBI12_I2C_SDA,
+		.flags	= IORESOURCE_IO,
 	},
 };
 
@@ -2513,8 +2554,10 @@ static struct fs_driver_data mdp_fs_data = {
 		{ .name = "lut_clk" },
 		{ .name = "tv_src_clk" },
 		{ .name = "tv_clk" },
+#if 0
 		{ .name = "reset1_clk" },
 		{ .name = "reset2_clk" },
+#endif
 		{ 0 }
 	},
 	.bus_port0 = MSM_BUS_MASTER_MDP_PORT0,
@@ -3392,7 +3435,7 @@ static struct kgsl_device_platform_data kgsl_2d0_pdata = {
 	.init_level = 0,
 	.num_levels = ARRAY_SIZE(grp2d_freq) + 1,
 	.set_grp_async = NULL,
-	.idle_timeout = HZ/5,
+	.idle_timeout = HZ/20,
 	.nap_allowed = true,
 	.clk_map = KGSL_CLK_CORE | KGSL_CLK_IFACE,
 #ifdef CONFIG_MSM_BUS_SCALING
@@ -3459,7 +3502,7 @@ static struct kgsl_device_platform_data kgsl_2d1_pdata = {
 	.init_level = 0,
 	.num_levels = ARRAY_SIZE(grp2d_freq) + 1,
 	.set_grp_async = NULL,
-	.idle_timeout = HZ/5,
+	.idle_timeout = HZ/20,
 	.nap_allowed = true,
 	.clk_map = KGSL_CLK_CORE | KGSL_CLK_IFACE,
 #ifdef CONFIG_MSM_BUS_SCALING
