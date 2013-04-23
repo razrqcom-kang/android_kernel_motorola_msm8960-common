@@ -27,12 +27,14 @@
 #include <mach/peripheral-loader.h>
 #include "smd_private.h"
 #include "ramdump.h"
+#include "wcnss_coredump.h"
 
 #define MODULE_NAME			"wcnss_8960"
 #define MAX_BUF_SIZE			0x51
 
 static struct delayed_work cancel_vote_work;
 static void *riva_ramdump_dev;
+static void *riva_coredump_dev;
 static int riva_crash;
 static int ss_restart_inprogress;
 static int enable_riva_ssr;
@@ -59,8 +61,10 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 		return;
 	}
 
-	if (!enable_riva_ssr)
-		panic(MODULE_NAME ": SMSM reset request received from Riva");
+	if (!enable_riva_ssr) {
+		pr_err(MODULE_NAME ": SMSM reset request received from Riva");
+		BUG();
+	}
 
 	smem_reset_reason = smem_get_entry(SMEM_SSR_REASON_WCNSS0,
 			&smem_reset_size);
@@ -96,8 +100,10 @@ static irqreturn_t riva_wdog_bite_irq_hdlr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	if (!enable_riva_ssr)
-		panic(MODULE_NAME ": Watchdog bite received from Riva");
+	if (!enable_riva_ssr) {
+		pr_err(MODULE_NAME ": Watchdog bite received from Riva");
+		BUG();
+	}
 
 	ss_restart_inprogress = true;
 	subsystem_restart_dev(riva_8960_dev);
@@ -176,7 +182,7 @@ static int riva_ramdump(int enable, const struct subsys_desc *subsys)
 				riva_segments,
 				ARRAY_SIZE(riva_segments));
 	else
-		return 0;
+		return do_riva_coredump(riva_coredump_dev);
 }
 
 /* Riva crash handler */
@@ -255,6 +261,13 @@ static int __init riva_ssr_module_init(void)
 	if (!riva_ramdump_dev) {
 		pr_err("%s: Unable to create ramdump device.\n",
 				MODULE_NAME);
+		ret = -ENOMEM;
+		goto out;
+	}
+	riva_coredump_dev = create_riva_coredump_device("riva");
+	if (!riva_coredump_dev) {
+		pr_err("%s: Unable to create riva coredump device. (%d)\n",
+				__func__, -ENOMEM);
 		ret = -ENOMEM;
 		goto out;
 	}
