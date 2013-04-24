@@ -111,14 +111,21 @@
 #include "rpm_stats.h"
 #endif
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <linux/persistent_ram.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
 };
 
-#define MSM_PMEM_ADSP_SIZE         0x6E00000 /* Need to be multiple of 64K */
-#define MSM_PMEM_AUDIO_SIZE        0xB4000
-#define MSM_PMEM_SIZE              0x4600000 /* 70 Mbytes */
+//0x6E00000 /* Need to be multiple of 64K */
+#define MSM_PMEM_ADSP_SIZE         0x7800000
+//0xB4000
+#define MSM_PMEM_AUDIO_SIZE        0x4CF000
+//0x4600000 /* 70 Mbytes */
+#define MSM_PMEM_SIZE              0x2800000 /* 40 Mbytes */
 #define MSM_LIQUID_PMEM_SIZE       0x4000000 /* 64 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE    0x4000000 /* 64 Mbytes */
 
@@ -132,7 +139,8 @@ static struct platform_device msm_fm_platform_init = {
 #ifdef CONFIG_MSM_IOMMU
 #define MSM_ION_MM_SIZE            0x3800000
 #define MSM_ION_SF_SIZE            0x0
-#define MSM_ION_QSECOM_SIZE        0x380000 /* (3.5MB) - can't fallback to SF */
+//0x380000 /* (3.5MB) - can't fallback to SF */
+#define MSM_ION_QSECOM_SIZE        0x780000 /* (7.5MB) */
 #ifdef CONFIG_CMA
 #define MMI_MSM_ION_HEAP_NUM	   8
 #else
@@ -141,14 +149,16 @@ static struct platform_device msm_fm_platform_init = {
 #else
 #define MSM_ION_MM_SIZE		   MSM_PMEM_ADSP_SIZE
 #define MSM_ION_SF_SIZE		   MSM_PMEM_SIZE
-#define MSM_ION_QSECOM_SIZE	   0x200000 /* (2MB) */
+//0x200000 /* (2MB) */
+#define MSM_ION_QSECOM_SIZE	   0x600000 /* (6MB) */
 #ifdef CONFIG_CMA
 #define MMI_MSM_ION_HEAP_NUM	   9
 #else
 #define MMI_MSM_ION_HEAP_NUM	   8
 #endif
 #endif
-#define MSM_ION_MM_FW_SIZE	   0x200000 /* (2MB) */
+//0x200000 /* (2MB) */
+#define MSM_ION_MM_FW_SIZE	   (0x200000 - HOLE_SIZE) /* 128kb */
 #define MSM_ION_MFC_SIZE	   SZ_8K
 #define MSM_ION_AUDIO_SIZE	   MSM_PMEM_AUDIO_SIZE
 
@@ -162,15 +172,20 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_LIQUID_ION_SF_SIZE MSM_LIQUID_PMEM_SIZE
 #define MSM_HDMI_PRIM_ION_SF_SIZE MSM_HDMI_PRIM_PMEM_SIZE
 
-#define MSM8960_FIXED_AREA_START   0xb0000000
+//0x200000
+#define MSM_MM_FW_SIZE		   (0x200000 - HOLE_SIZE) /* 2mb -128kb*/
+//0xb0000000
+#define MSM8960_FIXED_AREA_START   (0xa0000000 - (MSM_ION_MM_FW_SIZE + HOLE_SIZE)) 
 #define MAX_FIXED_AREA_SIZE	   0x10000000
-#define MSM_MM_FW_SIZE		   0x200000
-#define MSM8960_FW_START	   (MSM8960_FIXED_AREA_START - MSM_MM_FW_SIZE)
+//(MSM8960_FIXED_AREA_START - MSM_MM_FW_SIZE)
+#define MSM8960_FW_START	   MSM8960_FIXED_AREA_START
+#define MSM_ION_ADSP_SIZE	   SZ_8M
 
 static unsigned msm_ion_sf_size = MSM_ION_SF_SIZE;
 #else
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x110C000
-#define MSM_ION_HEAP_NUM           1
+#define MSM_CONTIG_MEM_SIZE  0x110C000
+//#define MSM_PMEM_KERNEL_EBI1_SIZE  0x110C000
+#define MSM_ION_HEAP_NUM	1
 #endif
 
 // FIXME-HASH: Camera will need some work
@@ -396,17 +411,21 @@ struct platform_device msm_device_dspcrashd_8960 = {
 };
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-static struct resource ram_console_resource[] = {
-	{
-		.flags	= IORESOURCE_MEM,
-	}
-};
-
 struct platform_device ram_console_device = {
 	.name = "ram_console",
 	.id = -1,
-	.num_resources  = ARRAY_SIZE(ram_console_resource),
-	.resource       = ram_console_resource,
+};
+
+struct persistent_ram_descriptor ram_console_desc = {
+	.name = "ram_console",
+	.size = MMI_RAM_CONSOLE_SIZE,
+};
+
+struct persistent_ram ram_console_ram = {
+	.start = MMI_RAM_CONSOLE_START,
+	.size = MMI_RAM_CONSOLE_SIZE,
+	.num_descs = 1,
+	.descs = &ram_console_desc,
 };
 #endif
 
@@ -472,9 +491,23 @@ static void __init size_pmem_devices(void)
 #endif
 }
 
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 static void __init reserve_memory_for(struct android_pmem_platform_data *p)
 {
 	msm8960_reserve_table[p->memory_type].size += p->size;
+}
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
+
+static void __init reserve_pmem_memory(void)
+{
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
+	reserve_memory_for(&android_pmem_audio_pdata);
+#endif
+	msm8960_reserve_table[MEMTYPE_EBI1].size += msm_contig_mem_size;
+#endif
 }
 
 static int msm8960_paddr_to_memtype(unsigned int paddr)
@@ -494,6 +527,10 @@ static struct ion_cp_heap_pdata cp_mm_ion_pdata = {
 	.fixed_position = FIXED_MIDDLE,
 	.iommu_map_all = 1,
 	.iommu_2x_map_domain = VIDEO_DOMAIN,
+#ifdef CONFIG_CMA
+	.is_cma = 1,
+#endif
+	.no_nonsecure_alloc = 1,
 };
 
 static struct ion_cp_heap_pdata cp_mfc_ion_pdata = {
@@ -502,6 +539,7 @@ static struct ion_cp_heap_pdata cp_mfc_ion_pdata = {
 	.reusable = 0,
 	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_HIGH,
+	.no_nonsecure_alloc = 1,
 };
 
 static struct ion_co_heap_pdata co_ion_pdata = {
@@ -623,9 +661,9 @@ struct ion_platform_heap msm8960_heaps[] = {
 			.name = ION_ADSP_HEAP_NAME,
 			.size = MSM_ION_ADSP_SIZE,
 			.memory_type = ION_EBI_TYPE,
-			.extra_data = (void *) &co_msm8960_ion_pdata,
+			.extra_data = (void *) &co_ion_pdata,
 			.priv = &ion_adsp_heap_device.dev,
-},
+		},
 #endif
 #endif
 };
@@ -725,10 +763,6 @@ static void __init reserve_ion_memory(void)
 	unsigned int high_use_cma = 0;
 
 	adjust_mem_for_liquid();
-	fmem_pdata.size = 0;
-	fmem_pdata.reserved_size_low = 0;
-	fmem_pdata.reserved_size_high = 0;
-	fmem_pdata.align = PAGE_SIZE;
 	fixed_low_size = 0;
 	fixed_middle_size = 0;
 	fixed_high_size = 0;
@@ -745,12 +779,9 @@ static void __init reserve_ion_memory(void)
 
 		if (heap->extra_data) {
 			int fixed_position = NOT_FIXED;
-			int mem_is_fmem = 0;
 
 			switch ((int)heap->type) {
 			case ION_HEAP_TYPE_CP:
-				mem_is_fmem = ((struct ion_cp_heap_pdata *)
-					heap->extra_data)->mem_is_fmem;
 				fixed_position = ((struct ion_cp_heap_pdata *)
 					heap->extra_data)->fixed_position;
 				align = ((struct ion_cp_heap_pdata *)
@@ -769,8 +800,6 @@ static void __init reserve_ion_memory(void)
 					use_cma = 1;
 				/* Purposely fall through here */
 			case ION_HEAP_TYPE_CARVEOUT:
-				mem_is_fmem = ((struct ion_co_heap_pdata *)
-					heap->extra_data)->mem_is_fmem;
 				fixed_position = ((struct ion_co_heap_pdata *)
 					heap->extra_data)->fixed_position;
 				adjacent_mem_id = ((struct ion_co_heap_pdata *)
@@ -787,9 +816,6 @@ static void __init reserve_ion_memory(void)
 						heap->name, heap->size);
 				}
 			}
-
-			if (mem_is_fmem && adjacent_mem_id != INVALID_HEAP_ID)
-				fmem_pdata.align = align;
 
 			if (fixed_position != NOT_FIXED)
 				fixed_size += heap->size;
@@ -816,26 +842,17 @@ static void __init reserve_ion_memory(void)
 					0,
 					0xb0000000);
 			}
-			if (mem_is_fmem)
-				fmem_pdata.size += heap->size;
 		}
 	}
 
 	if (!fixed_size)
 		return;
 
-	if (fmem_pdata.size) {
-		fmem_pdata.reserved_size_low = fixed_low_size;
-		fmem_pdata.reserved_size_high = fixed_high_size;
-	}
-
 	/*
 	 * Given the setup for the fixed area, we can't round up all sizes.
 	 * Some sizes must be set up exactly and aligned correctly. Incorrect
 	 * alignments are considered a configuration issue
 	 */
-
-	msm8960_reserve_fixed_area(fixed_size + MSM_MM_FW_SIZE);
 
 	fixed_low_start = MSM8960_FIXED_AREA_START;
 	if (low_use_cma) {
@@ -848,7 +865,7 @@ static void __init reserve_ion_memory(void)
 		BUG_ON(ret);
 	}
 
-	fixed_middle_start = fixed_low_start + fixed_low_size;
+	fixed_middle_start = fixed_low_start + fixed_low_size + HOLE_SIZE;
 	if (middle_use_cma) {
 		BUG_ON(!IS_ALIGNED(fixed_middle_start, cma_alignment));
 		BUG_ON(!IS_ALIGNED(fixed_middle_size, cma_alignment));
@@ -954,14 +971,11 @@ static void reserve_cache_dump_memory(void)
 static void __init msm8960_calculate_reserve_sizes(void)
 {
 	size_pmem_devices();
+	reserve_pmem_memory();
 	reserve_ion_memory();
 	reserve_mdp_memory();
 	reserve_rtb_memory();
 	reserve_cache_dump_memory();
-#ifdef CONFIG_ANDROID_PMEM
-	reserve_memory_for(&android_pmem_audio_pdata);
-#endif
-	msm8960_reserve_table[MEMTYPE_EBI1].size += msm_contig_mem_size;
 }
 
 static struct reserve_info msm8960_reserve_info __initdata = {
@@ -1292,15 +1306,9 @@ out:
 
 void __init msm8960_allocate_memory_regions(void)
 {
-	unsigned long size;
-
 	msm8960_allocate_fb_region();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-	size = MMI_RAM_CONSOLE_SIZE;
-	ram_console_resource[0].start = MMI_RAM_CONSOLE_START;
-	ram_console_resource[0].end = ram_console_resource[0].start + size - 1;
-	pr_info("allocating %lu bytes at %p for RAM console\n",
-			size, (void *)ram_console_resource[0].start);
+	persistent_ram_early_init(&ram_console_ram);
 #endif
 }
 
