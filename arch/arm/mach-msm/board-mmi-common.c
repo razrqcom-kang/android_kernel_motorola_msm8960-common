@@ -407,7 +407,7 @@ struct platform_device msm_device_dspcrashd_8960 = {
 	.dev = { .platform_data = &dspcrashd_pdata_8960 },
 };
 
-#define MMI_PERSISTENT_RAM_BASE    0xbff00000
+#define MMI_PERSISTENT_RAM_BASE    0xbf700000
 #define MMI_PERSISTENT_RAM_SIZE    SZ_1M
 #define MMI_RAM_CONSOLE_SIZE       (124*SZ_1K * 2)
 
@@ -427,12 +427,6 @@ static struct persistent_ram msm8960_persistent_ram = {
 	.num_descs = ARRAY_SIZE(pram_descs),
 	.descs = pram_descs,
 };
-
-void __init add_persistent_ram(void) {
-    persistent_ram_early_init(&msm8960_persistent_ram);
-}
-#else
-void __init add_persistent_ram(void) { }
 #endif /* CONFIG_ANDROID_PERSISTENT_RAM */
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
@@ -1031,7 +1025,6 @@ void __init msm8960_reserve(void)
 {
 	msm8960_set_display_params(prim_panel_name, ext_panel_name);
 	msm_reserve();
-	add_persistent_ram();
 	if (fmem_pdata.size) {
 #if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
 		fmem_pdata.phys = reserve_info->fixed_area_start +

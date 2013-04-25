@@ -3106,13 +3106,14 @@ static void __init msm8960_mmi_init(void)
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	add_ramconsole_devices();
+#endif
+
 	msm8960_init_tsens();
 	msm8960_init_rpm();
 	msm_init_apanic();
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	add_ramconsole_devices();
-#endif
 	config_keyboard_from_dt();
 
 	config_EMU_detection_from_dt();

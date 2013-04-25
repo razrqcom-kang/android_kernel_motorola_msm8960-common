@@ -134,7 +134,7 @@ void my_out_va(const char* str, va_list va)
 	if (ram_console_inited == 0)
 	{
 		ram_console_inited = 1;
-		ram_console_init((struct ram_console_buffer *)0xbff00000, 0x00100000);
+		ram_console_init((struct ram_console_buffer *)0xbf700000, 0x00100000);
 	}
 
 	vsprintf(strbuffer, str, va);

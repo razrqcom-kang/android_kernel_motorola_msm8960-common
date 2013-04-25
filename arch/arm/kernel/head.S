@@ -305,7 +305,7 @@ __create_page_tables:
 	str	r3, [r0]
 #endif
 #ifdef CONFIG_EARLY_RAM_CONSOLE
-	ldr	r12, =0xbff00000
+	ldr	r12, =0xbf700000
 	add	r0, r4, r12, lsr #(SECTION_SHIFT - PMD_ORDER)
 	orr	r3, r7, r12
 	str	r3, [r0]
