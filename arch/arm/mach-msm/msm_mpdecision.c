@@ -192,6 +192,7 @@ out:
 
 static void bring_up_cpu(int cpu)
 {
+#ifdef CONFIG_SMP
 	int cpu_action_time_ms;
 	int time_taken_ms;
 	int ret, ret1, ret2;
@@ -215,10 +216,12 @@ static void bring_up_cpu(int cpu)
 		if (ret)
 			pr_err("Error sending hotplug scm event err=%d\n", ret);
 	}
+#endif
 }
 
 static void bring_down_cpu(int cpu)
 {
+#ifdef CONFIG_SMP
 	int cpu_action_time_ms;
 	int time_taken_ms;
 	int ret, ret1, ret2;
@@ -243,6 +246,7 @@ static void bring_down_cpu(int cpu)
 		if (ret)
 			pr_err("Error sending hotplug scm event err=%d\n", ret);
 	}
+#endif
 }
 
 static int __ref msm_mpd_update_scm(enum msm_dcvs_scm_event event, int nr)

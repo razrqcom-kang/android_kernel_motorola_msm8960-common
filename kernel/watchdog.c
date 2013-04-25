@@ -255,9 +255,12 @@ static void watchdog_interrupt_count(void)
 static inline void watchdog_interrupt_count(void) { return; }
 #endif /* CONFIG_HARDLOCKUP_DETECTOR */
 
-/* watchdog kicker functions */static DEFINE_SPINLOCK(wdt_lock);
+/* watchdog kicker functions */
+static DEFINE_SPINLOCK(wdt_lock);
 
+#ifdef CONFIG_SMP
 extern int is_csd_lock_waiting(void);
+#endif
 
 static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 {
@@ -315,11 +318,13 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 #endif
 			dump_stack();
 
+#ifdef CONFIG_SMP
 		if(is_csd_lock_waiting()) {
 			show_cpu_current_stack_mem();
 			printk(KERN_ERR "softlockup: trigger watchdog reset!\n");
 			while(1);
 		}
+#endif
 
 		if (softlockup_panic)
 			panic("softlockup: hung tasks");

@@ -83,8 +83,10 @@ static int update_cpu_max_freq(int cpu, uint32_t max_freq)
 
 static void __cpuinit do_core_control(long temp)
 {
+#ifdef CONFIG_SMP
 	int i = 0;
 	int ret = 0;
+#endif
 
 	if (!core_control_enabled)
 		return;
@@ -103,6 +105,7 @@ static void __cpuinit do_core_control(long temp)
 	mutex_lock(&core_control_mutex);
 	if (msm_thermal_info.core_control_mask &&
 		temp >= msm_thermal_info.core_limit_temp_degC) {
+#ifdef CONFIG_SMP
 		for (i = num_possible_cpus(); i > 0; i--) {
 			if (!(msm_thermal_info.core_control_mask & BIT(i)))
 				continue;
@@ -117,9 +120,11 @@ static void __cpuinit do_core_control(long temp)
 			cpus_offlined |= BIT(i);
 			break;
 		}
+#endif
 	} else if (msm_thermal_info.core_control_mask && cpus_offlined &&
 		temp <= (msm_thermal_info.core_limit_temp_degC -
 			msm_thermal_info.core_temp_hysteresis_degC)) {
+#ifdef CONFIG_SMP
 		for (i = 0; i < num_possible_cpus(); i++) {
 			if (!(cpus_offlined & BIT(i)))
 				continue;
@@ -137,6 +142,7 @@ static void __cpuinit do_core_control(long temp)
 						KBUILD_MODNAME, ret, i);
 			break;
 		}
+#endif
 	}
 	mutex_unlock(&core_control_mutex);
 }
@@ -279,6 +285,7 @@ MODULE_PARM_DESC(enabled, "enforce thermal limit on cpu");
 /* Call with core_control_mutex locked */
 static int __cpuinit update_offline_cores(int val)
 {
+#ifdef CONFIG_SMP
 	int cpu = 0;
 	int ret = 0;
 
@@ -297,6 +304,9 @@ static int __cpuinit update_offline_cores(int val)
 				KBUILD_MODNAME, cpu);
 	}
 	return ret;
+#else
+	return 0;
+#endif
 }
 
 static ssize_t show_cc_enabled(struct kobject *kobj,
