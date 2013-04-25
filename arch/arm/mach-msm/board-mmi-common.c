@@ -111,7 +111,7 @@
 #include "rpm_stats.h"
 #endif
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
 #include <linux/persistent_ram.h>
 #endif
 
@@ -128,9 +128,6 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_PMEM_SIZE              0x2800000 /* 40 Mbytes */
 #define MSM_LIQUID_PMEM_SIZE       0x4000000 /* 64 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE    0x4000000 /* 64 Mbytes */
-
-#define MMI_RAM_CONSOLE_START      0xbff00000
-#define MMI_RAM_CONSOLE_SIZE       (SZ_1M)   /* was 128 * SZ_1K */
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #define HOLE_SIZE                  0x20000
@@ -410,24 +407,46 @@ struct platform_device msm_device_dspcrashd_8960 = {
 	.dev = { .platform_data = &dspcrashd_pdata_8960 },
 };
 
+#define MMI_PERSISTENT_RAM_BASE    0xbff00000
+#define MMI_PERSISTENT_RAM_SIZE    SZ_1M
+#define MMI_RAM_CONSOLE_SIZE       (124*SZ_1K * 2)
+
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
+struct persistent_ram_descriptor pram_descs[] = {
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	{
+		.name = "ram_console",
+		.size = MMI_RAM_CONSOLE_SIZE,
+	},
+#endif
+};
+
+static struct persistent_ram msm8960_persistent_ram = {
+	.start = MMI_PERSISTENT_RAM_BASE,
+	.size = MMI_PERSISTENT_RAM_SIZE,
+	.num_descs = ARRAY_SIZE(pram_descs),
+	.descs = pram_descs,
+};
+
+void __init add_persistent_ram(void) {
+    persistent_ram_early_init(&msm8960_persistent_ram);
+}
+#else
+void __init add_persistent_ram(void) { }
+#endif /* CONFIG_ANDROID_PERSISTENT_RAM */
+
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 struct platform_device ram_console_device = {
 	.name = "ram_console",
 	.id = -1,
 };
 
-struct persistent_ram_descriptor ram_console_desc = {
-	.name = "ram_console",
-	.size = MMI_RAM_CONSOLE_SIZE,
-};
-
-struct persistent_ram ram_console_ram = {
-	.start = MMI_RAM_CONSOLE_START,
-	.size = MMI_RAM_CONSOLE_SIZE,
-	.num_descs = 1,
-	.descs = &ram_console_desc,
-};
-#endif
+void __init add_ramconsole_devices(void) {
+	platform_device_register(&ram_console_device);
+}
+#else
+void __init add_ramconsole_devices(void) { }
+#endif /* CONFIG_ANDROID_RAM_CONSOLE */
 
 static struct memtype_reserve msm8960_reserve_table[] __initdata = {
 	[MEMTYPE_SMI] = {
@@ -1012,6 +1031,7 @@ void __init msm8960_reserve(void)
 {
 	msm8960_set_display_params(prim_panel_name, ext_panel_name);
 	msm_reserve();
+	add_persistent_ram();
 	if (fmem_pdata.size) {
 #if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
 		fmem_pdata.phys = reserve_info->fixed_area_start +
@@ -1308,7 +1328,7 @@ void __init msm8960_allocate_memory_regions(void)
 {
 	msm8960_allocate_fb_region();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-	persistent_ram_early_init(&ram_console_ram);
+	persistent_ram_early_init(&msm8960_persistent_ram);
 #endif
 }
 
@@ -2275,9 +2295,6 @@ struct platform_device *common_devices[] __initdata = {
 	&android_pmem_adsp_device,
 #endif
 	&android_pmem_audio_device,
-#endif
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	&ram_console_device,
 #endif
 	&msm_device_vidc,
 	&msm_device_bam_dmux,

@@ -1100,7 +1100,12 @@ static inline void prepare_page_table(void)
 	/*
 	 * Clear out all the mappings below the kernel image.
 	 */
+// FIXME-HASH: avoid ram console
+#ifdef CONFIG_EARLY_RAM_CONSOLE
+	for (addr = 0xc0000000; addr < MODULES_VADDR; addr += PMD_SIZE)
+#else
 	for (addr = 0; addr < MODULES_VADDR; addr += PMD_SIZE)
+#endif
 		pmd_clear(pmd_off_k(addr));
 
 #ifdef CONFIG_XIP_KERNEL

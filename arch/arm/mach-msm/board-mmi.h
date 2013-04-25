@@ -105,4 +105,6 @@ extern int is_smd_hd_465(void);
 extern int is_smd_qhd_429(void);
 extern int is_auo_hd_450(void);
 
+extern void __init add_ramconsole_devices(void);
+
 #endif

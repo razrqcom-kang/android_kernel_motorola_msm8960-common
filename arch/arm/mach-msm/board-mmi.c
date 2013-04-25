@@ -135,7 +135,6 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/apanic_mmc.h>
-#include <linux/platform_data/ram_console.h>
 
 
 //#define ENABLE_CAMERAS 1
@@ -3104,15 +3103,6 @@ core_initcall(msm8960_get_acputype);
 
 static void __init msm8960_mmi_init(void)
 {
-	if (mbm_protocol_version == 0)
-		pr_err("ERROR: ATAG MBM_PROTOCOL_VERSION is not present."
-			" Bootloader update is required\n");
-
-#if 0
-	else if (EXPECTED_MBM_PROTOCOL_VERSION != mbm_protocol_version)
-		msm_restart(0, "mbm_proto_ver_mismatch");
-#endif
-
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 
@@ -3120,6 +3110,9 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_rpm();
 	msm_init_apanic();
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	add_ramconsole_devices();
+#endif
 	config_keyboard_from_dt();
 
 	config_EMU_detection_from_dt();
