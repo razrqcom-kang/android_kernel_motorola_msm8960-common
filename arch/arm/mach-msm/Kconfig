@@ -2655,5 +2655,6 @@ config EARLY_RAM_CONSOLE
 	bool "Use jonpry's early ram buffer (don't leave on!)"
 	help
 	  Buffer is used at start for early logging w/o ram console device
+	  ** Currently this needs CONFIG_SMP disabled in the defconfig
 
 endif
