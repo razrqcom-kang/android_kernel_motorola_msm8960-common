@@ -1235,6 +1235,7 @@ static void __init devicemaps_init(struct machine_desc *mdesc)
 	if (mdesc->map_io)
 		mdesc->map_io();
 	fill_pmd_gaps();
+	pr_info("after fill_pmd_gaps()\n");
 
 	/*
 	 * Finally flush the caches and tlb to ensure that we're in a
@@ -1243,6 +1244,7 @@ static void __init devicemaps_init(struct machine_desc *mdesc)
 	 * back.  After this point, we can start to touch devices again.
 	 */
 	local_flush_tlb_all();
+	pr_info("local_flush_tlb_all()\n");
 	flush_cache_all();
 }
 
