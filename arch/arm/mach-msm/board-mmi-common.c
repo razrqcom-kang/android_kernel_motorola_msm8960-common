@@ -19,8 +19,7 @@
 #include <linux/i2c/isl9519.h>
 #include <linux/gpio.h>
 #include <linux/msm_ssbi.h>
-#include <linux/regulator/driver.h>
-#include <linux/regulator/gpio-regulator.h>
+#include <linux/regulator/msm-gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/regulator/consumer.h>
@@ -657,7 +656,6 @@ struct ion_platform_heap msm8960_heaps[] = {
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = (void *) &co_ion_pdata,
 		},
-#ifndef CONFIG_KERNEL_PMEM_AUDIO_MMI
 		{
 			.id	= ION_AUDIO_HEAP_ID,
 			.type	= ION_HEAP_TYPE_CARVEOUT,
@@ -666,7 +664,6 @@ struct ion_platform_heap msm8960_heaps[] = {
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = (void *) &co_ion_pdata,
 		},
-#endif
 #ifdef CONFIG_CMA
 		{
 			.id = ION_ADSP_HEAP_ID,

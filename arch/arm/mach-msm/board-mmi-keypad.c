@@ -22,8 +22,7 @@
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
 #include <linux/regulator/pm8xxx-regulator.h>
-#include <linux/regulator/driver.h>
-#include <linux/regulator/gpio-regulator.h>
+#include <linux/regulator/msm-gpio-regulator.h>
 #include <linux/module.h>
 #include <mach/rpm-regulator.h>
 #ifdef CONFIG_KEYBOARD_GPIO
