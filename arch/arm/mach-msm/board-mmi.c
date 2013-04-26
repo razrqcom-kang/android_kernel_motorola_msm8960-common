@@ -3109,6 +3109,7 @@ static void __init msm8960_mmi_init(void)
 	add_ramconsole_devices();
 #endif
 
+	platform_device_register(&msm_gpio_device);
 	msm8960_init_tsens();
 	msm8960_init_rpm();
 	msm_init_apanic();
