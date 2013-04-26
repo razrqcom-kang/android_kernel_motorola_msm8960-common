@@ -47,12 +47,8 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	 * Copy over the kernel and IO PGD entries
 	 */
 	init_pgd = pgd_offset_k(0);
-#ifdef CONFIG_EARLY_RAM_CONSOLE
-	memcpy(new_pgd, init_pgd, PTRS_PER_PGD * sizeof(pgd_t));
-#else
 	memcpy(new_pgd + USER_PTRS_PER_PGD, init_pgd + USER_PTRS_PER_PGD,
 		       (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
-#endif
 
 	clean_dcache_area(new_pgd, PTRS_PER_PGD * sizeof(pgd_t));
 
