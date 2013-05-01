@@ -393,6 +393,8 @@ int mdp4_dsi_cmd_pipe_commit(int cndx, int wait)
 		long long tick;
 
 		mdp4_dsi_cmd_wait4vsync(0, &tick);
+		if (!dsi_panel_on)
+			mdp4_dsi_panel_on(vctrl->mfd);
 	}
 
 	return cnt;
@@ -1024,6 +1026,8 @@ int mdp4_dsi_cmd_on(struct platform_device *pdev)
 
 	atomic_set(&vctrl->suspend, 0);
 
+	dsi_panel_on = false;
+
 	pr_debug("%s-:\n", __func__);
 
 	return ret;
@@ -1204,11 +1208,9 @@ void mdp4_dsi_panel_on(struct msm_fb_data_type *mfd)
 	struct msm_fb_panel_data *pdata =
 		(struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
-	if (dsi_panel_on == false) {
-		if (pdata->panel_on)
-			pdata->panel_on(mfd->pdev);
+	if (pdata->panel_on)
+		pdata->panel_on(mfd->pdev);
 
-		dsi_panel_on = true;
-	}
+	dsi_panel_on = true;
 #endif
 }

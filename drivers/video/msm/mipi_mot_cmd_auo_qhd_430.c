@@ -36,7 +36,6 @@ static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 static char enter_sleep[2] = {DCS_CMD_ENTER_SLEEP_MODE, 0x00};
 static char exit_sleep[2] = {DCS_CMD_EXIT_SLEEP_MODE, 0x00};
 static char display_off[2] = {DCS_CMD_SET_DISPLAY_OFF, 0x00};
-static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char led_pwm1[2] = {DCS_CMD_SET_BRIGHTNESS, 0xFF};
 static char led_pwm2[2] = {DCS_CMD_SET_CABC, 0x03};
@@ -68,7 +67,6 @@ static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
-    {DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_on), display_on},
 };
 
 static struct dsi_cmd_desc mot_cmd_inverted_on_cmds[] = {
@@ -289,7 +287,7 @@ out:
 	mot_panel->panel_disable = panel_disable;
 
 	/* For ESD detection information */
-	mot_panel->esd_enabled = true;
+	mot_panel->esd_enabled = false;
 	mot_panel->is_valid_manufacture_id = is_valid_manufacture_id;
 
 	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM,
