@@ -218,15 +218,15 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 
 	switch (event) {
 	case VCD_EVT_RESP_OUTPUT_DONE:
-	   DBG("Send INPUT_DON message to client = %p\n",
+	   DBG("Send OUTPUT_DON message to client = %p\n",
 			client_ctx);
 	   break;
 	case VCD_EVT_RESP_OUTPUT_FLUSHED:
-	   DBG("Send INPUT_FLUSHED message to client = %p\n",
+	   DBG("Send OUTPUT_FLUSHED message to client = %p\n",
 		   client_ctx);
 	   break;
 	default:
-	   ERR("QVD: vid_enc_output_frame_done invalid cmd type: %d\n", event);
+	   ERR("vid_enc_output_frame_done invalid cmd type: %d\n", event);
 	   venc_msg->venc_msg_info.statuscode = VEN_S_EFATAL;
 	   break;
 	}
@@ -254,6 +254,12 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 			vcd_frame_data->time_stamp;
 		venc_msg->venc_msg_info.buf.sz =
 			vcd_frame_data->alloc_len;
+		/* Metadata length */
+		venc_msg->venc_msg_info.buf.metadata_len =
+			vcd_frame_data->metadata_len;
+		/* Metadata offset */
+		venc_msg->venc_msg_info.buf.metadata_offset =
+			vcd_frame_data->metadata_offset;
 
 		/* Decoded picture width and height */
 		venc_msg->venc_msg_info.msgdata_size =
@@ -270,7 +276,7 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 		if (ion_flag == ION_FLAG_CACHED && buff_handle) {
 			msm_ion_do_cache_op(client_ctx->user_ion_client,
 				buff_handle,
-				(unsigned long *) kernel_vaddr,
+				(unsigned long *) NULL,
 				(unsigned long)venc_msg->venc_msg_info.buf.sz,
 				ION_IOC_CLEAN_INV_CACHES);
 		}

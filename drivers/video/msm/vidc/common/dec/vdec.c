@@ -312,6 +312,12 @@ static void vid_dec_output_frame_done(struct video_client_ctx *client_ctx,
 		    vcd_frame_data->data_len;
 		vdec_msg->vdec_msg_info.msgdata.output_frame.flags =
 		    vcd_frame_data->flags;
+		/* metadata offset in output buffer for non-secure mode */
+		vdec_msg->vdec_msg_info.msgdata.output_frame.metadata_len =
+			(size_t)vcd_frame_data->metadata_len;
+		/* metadata offset in output buffer for non-secure mode */
+		vdec_msg->vdec_msg_info.msgdata.output_frame.metadata_offset =
+			(size_t)vcd_frame_data->metadata_offset;
 		/* Timestamp pass-through from input frame */
 		vdec_msg->vdec_msg_info.msgdata.output_frame.time_stamp =
 		    vcd_frame_data->time_stamp;
@@ -381,13 +387,11 @@ static void vid_dec_output_frame_done(struct video_client_ctx *client_ctx,
 				pmem_fd, kernel_vaddr, buffer_index,
 				&buff_handle);
 		if (ion_flag == ION_FLAG_CACHED && buff_handle) {
-			DBG("%s: Cache invalidate: vaddr (%p), "\
-				"size %u\n", __func__,
-				(void *)kernel_vaddr,
+			DBG("%s: Cache invalidate: size %u", __func__,
 				vcd_frame_data->alloc_len);
 			msm_ion_do_cache_op(client_ctx->user_ion_client,
 					buff_handle,
-					(unsigned long *) kernel_vaddr,
+					(unsigned long *) NULL,
 					(unsigned long)vcd_frame_data->\
 					alloc_len,
 					ION_IOC_INV_CACHES);
@@ -1665,7 +1669,7 @@ static u32 vid_dec_decode_frame(struct video_client_ctx *client_ctx,
 			if (ion_flag == ION_FLAG_CACHED && buff_handle) {
 				msm_ion_do_cache_op(client_ctx->user_ion_client,
 				buff_handle,
-				(unsigned long *)kernel_vaddr,
+				(unsigned long *) NULL,
 				(unsigned long) vcd_input_buffer.data_len,
 				ION_IOC_CLEAN_CACHES);
 			}
@@ -1936,6 +1940,19 @@ static long vid_dec_ioctl(struct file *file,
 		buffer_req.max_count = vdec_buf_req.maxcount;
 		buffer_req.min_count = vdec_buf_req.mincount;
 		buffer_req.sz = vdec_buf_req.buffer_size;
+		buffer_req.buf_pool_id = vdec_buf_req.buf_poolid;
+		buffer_req.meta_buffer_size = vdec_buf_req.meta_buffer_size;
+		DBG("SET_BUF_REQ: port = %u, min = %u, max = %u, "\
+			"act = %u, size = %u, align = %u, pool = %u, "\
+			"meta_buf_size = %u",
+			(u32)vdec_buf_req.buffer_type,
+			(u32)buffer_req.min_count,
+			(u32)buffer_req.max_count,
+			(u32)buffer_req.actual_count,
+			(u32)buffer_req.sz,
+			(u32)buffer_req.align,
+			(u32)buffer_req.buf_pool_id,
+			(u32)buffer_req.meta_buffer_size);
 
 		switch (vdec_buf_req.buffer_type) {
 		case VDEC_BUFFER_TYPE_INPUT:
@@ -1968,8 +1985,19 @@ static long vid_dec_ioctl(struct file *file,
 			return -EFAULT;
 
 		result = vid_dec_get_buffer_req(client_ctx, &vdec_buf_req);
-
 		if (result) {
+			DBG("GET_BUF_REQ: port = %u, min = %u, "\
+				"max = %u, act = %u, size = %u, "\
+				"align = %u, pool = %u, "\
+				"meta_buf_size = %u",
+				(u32)vdec_buf_req.buffer_type,
+				(u32)vdec_buf_req.mincount,
+				(u32)vdec_buf_req.maxcount,
+				(u32)vdec_buf_req.actualcount,
+				(u32)vdec_buf_req.buffer_size,
+				(u32)vdec_buf_req.alignment,
+				(u32)vdec_buf_req.buf_poolid,
+				(u32)vdec_buf_req.meta_buffer_size);
 			if (copy_to_user(vdec_msg.out, &vdec_buf_req,
 					sizeof(vdec_buf_req)))
 				return -EFAULT;
@@ -2023,6 +2051,7 @@ static long vid_dec_ioctl(struct file *file,
 	}
 	case VDEC_IOCTL_CMD_PAUSE:
 	{
+		DBG("VDEC_IOCTL_CMD_PAUSE\n");
 		result = vid_dec_pause_resume(client_ctx, true);
 		if (!result)
 			return -EIO;
@@ -2076,6 +2105,7 @@ static long vid_dec_ioctl(struct file *file,
 	}
 	case VDEC_IOCTL_SET_PERF_CLK:
 	{
+		DBG("VDEC_IOCTL_SET_PERF_CLK\n");
 		vid_dec_set_turbo_clk(client_ctx);
 		break;
 	}
@@ -2435,6 +2465,7 @@ static long vid_dec_ioctl(struct file *file,
 	}
 	case VDEC_IOCTL_SET_IDR_ONLY_DECODING:
 	{
+		DBG("VDEC_IOCTL_SET_IDR_ONLY_DECODING\n");
 		result = vid_dec_set_idr_only_decoding(client_ctx);
 		if (!result)
 			return -EIO;
@@ -2442,6 +2473,7 @@ static long vid_dec_ioctl(struct file *file,
 	}
 	case VDEC_IOCTL_SET_CONT_ON_RECONFIG:
 	{
+		DBG("VDEC_IOCTL_SET_CONT_ON_RECONFIG\n");
 		result = vid_dec_set_cont_on_reconfig(client_ctx);
 		if (!result)
 			return -EIO;
