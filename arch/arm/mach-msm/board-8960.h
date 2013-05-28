@@ -107,8 +107,8 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 #endif
 
 #define MSM_PMEM_ADSP_SIZE         0x6E00000 /* Need to be multiple of 64K */
-#define MSM_PMEM_AUDIO_SIZE        0xB4000
-#define MSM_PMEM_SIZE 0x4600000 /* 70 Mbytes */
+#define MSM_PMEM_AUDIO_SIZE        0x4CF000
+#define MSM_PMEM_SIZE 0x5000000 /* 80 Mbytes */
 #define MSM_LIQUID_PMEM_SIZE 0x4000000 /* 64 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE 0x4000000 /* 64 Mbytes */
 #define MSM_RAM_CONSOLE_SIZE       128 * SZ_1K
@@ -282,9 +282,10 @@ extern void __init pm8921_gpio_mpp_init(struct pm8xxx_gpio_init *pm8921_gpios,
 extern void __init msm8960_init_slim(void);
 extern void __init msm8960_pm_init(unsigned wakeup_irq);
 extern void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
-								int mode, int cool_temp,
-			       int warm_temp, void *cb, int lock,
-			       int hot_temp, int hot_temp_offset);
+			       int mode, int cool_temp, int warm_temp, void *cb,
+			       int lock, int hot_temp, int hot_temp_offset,
+			       int hot_temp_pcb,
+			       signed char hot_temp_pcb_offset);
 
 extern int  msm8960_change_memory_power(u64 start, u64 size, int change_type);
 extern void __init msm8960_map_io(void);

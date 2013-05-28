@@ -375,6 +375,50 @@ static int get_hot_offset_dt(void)
 	return hot_temp_off;
 }
 
+static int get_hot_temp_pcb_dt(void)
+{
+	struct device_node *parent;
+	int len = 0;
+	const void *prop;
+	u8 hot_temp_pcb = 0;
+
+	parent = of_find_node_by_path("/System@0/PowerIC@0");
+	if (!parent) {
+		pr_info("Parent Not Found\n");
+		return 0;
+	}
+	prop = of_get_property(parent, "chg-hot-temp-pcb", &len);
+	if (prop && (len == sizeof(u8)))
+		hot_temp_pcb = *(u8 *)prop;
+
+	of_node_put(parent);
+	pr_info("DT Hot Temp PCB = %d\n", hot_temp_pcb);
+	return hot_temp_pcb;
+}
+
+static signed char get_hot_pcb_offset_dt(void)
+{
+	struct device_node *parent;
+	int len = 0;
+	const void *prop;
+	signed char hot_temp_pcb_off = 0;
+
+	parent = of_find_node_by_path("/System@0/PowerIC@0");
+	if (!parent) {
+		pr_info("Parent Not Found\n");
+		return 0;
+	}
+
+	prop = of_get_property(parent, "chg-hot-temp-pcb-offset", &len);
+	if (prop && (len == sizeof(u8)))
+		hot_temp_pcb_off = *(signed char *)prop;
+
+	of_node_put(parent);
+
+	pr_info("DT Hot Temp Offset PCB = %d\n", (int)hot_temp_pcb_off);
+	return hot_temp_pcb_off;
+}
+
 static struct emu_det_dt_data	emu_det_dt_data = {
 	.ic_type	= IC_EMU_POWER,
 	.uart_gsbi	= UART_GSBI12,
@@ -924,6 +968,23 @@ static int is_auo_hd_450(void)
 	return !strncmp(panel_name, "mipi_mot_cmd_auo_hd_450",
 							PANEL_NAME_MAX_LEN);
 }
+/* on vanquish, met mipi read issue after panel resume at very rare rate.
+ * The issue was caused the noise that VDDIO coupled into VCI during resume,
+ * the noise would get into IC logic block that caused mipi block to be
+ * unstable. Having VDDIO comes before VCI for 18ms avoided the high
+ * spike on VCI during resume
+ */
+static bool is_defered_vci_en(void)
+{
+	bool ret = false;
+
+	if (is_smd_hd_465())
+		ret = true;
+
+	return ret;
+}
+
+static struct regulator *reg_vci;
 
 /*
  * This voltage used to enable in mipi_dsi_panel_power() but since SOL
@@ -1148,6 +1209,27 @@ end:
 	return rc;
 }
 
+int panel_turn_on_vci(struct regulator *reg_vci)
+{
+	int rc = 0;
+
+	if (NULL != reg_vci) {
+		rc = regulator_set_optimum_mode(reg_vci, 100000);
+		if (rc < 0) {
+			pr_err("set_optimum_mode vci failed, rc=%d\n", rc);
+			rc = -EINVAL;
+		}
+
+		rc = regulator_enable(reg_vci);
+		if (rc) {
+			pr_err("enable vci failed, rc=%d\n", rc);
+			rc = -ENODEV;
+		}
+	}
+
+	return rc;
+}
+
 int mipi_panel_power_en(int on)
 {
 	int rc;
@@ -1261,6 +1343,14 @@ int mipi_panel_power_en(int on)
 		if (is_smd_hd_465() && system_rev >= HWREV_P1)
 			gpio_set_value_cansleep(0, 1);
 
+		if (is_defered_vci_en() == true) {
+			/* defer to turn on VCI after vddio on for 18ms*/
+			mdelay(18);
+			rc = panel_turn_on_vci(reg_vci);
+			if (rc)
+				goto end;
+		}
+
 		if (is_smd_hd_465())
 			mdelay(30);
 		else if (is_smd_qhd_429())
@@ -1309,7 +1399,7 @@ end:
 static int mipi_panel_power(int on)
 {
 	static bool panel_power_on;
-	static struct regulator *reg_vddio, *reg_vci;
+	static struct regulator *reg_vddio;
 	int rc;
 
 	pr_debug("%s (%d) is called\n", __func__, on);
@@ -1394,21 +1484,10 @@ static int mipi_panel_power(int on)
 			}
 		}
 
-		if (NULL != reg_vci) {
-			rc = regulator_set_optimum_mode(reg_vci, 100000);
-			if (rc < 0) {
-				pr_err("set_optimum_mode vci failed, rc=%d\n",
-									rc);
-				rc = -EINVAL;
+		if (is_defered_vci_en() == false) { /* turn on VCI now */
+			rc = panel_turn_on_vci(reg_vci);
+			if (rc)
 				goto end;
-			}
-
-			rc = regulator_enable(reg_vci);
-			if (rc) {
-				pr_err("enable vci failed, rc=%d\n", rc);
-				rc = -ENODEV;
-				goto end;
-			}
 		}
 
 		mipi_panel_power_en(1);
@@ -3836,7 +3915,8 @@ static void __init msm8960_mmi_init(void)
 
 	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 45,
 		    reboot_ptr, battery_data_is_meter_locked(),
-		    get_hot_temp_dt(),  get_hot_offset_dt());
+		    get_hot_temp_dt(),  get_hot_offset_dt(),
+		    get_hot_temp_pcb_dt(), get_hot_pcb_offset_dt());
 
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
