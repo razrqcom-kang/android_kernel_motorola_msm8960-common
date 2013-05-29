@@ -151,6 +151,7 @@ struct smd_platform {
 	struct smd_subsystem_restart_config *smd_ssr_config;
 	uint32_t num_smem_areas;
 	struct smd_smem_regions *smd_smem_areas;
+	void *custom_data;
 };
 
 #ifdef CONFIG_MSM_SMD
