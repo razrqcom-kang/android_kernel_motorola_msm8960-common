@@ -166,7 +166,8 @@ static int msm_gpio_direction_output(struct gpio_chip *chip,
 	return 0;
 }
 
-#ifdef CONFIG_OF
+#if 0
+//#ifdef CONFIG_OF
 static int msm_gpio_to_irq(struct gpio_chip *chip, unsigned offset)
 {
 	struct msm_gpio_dev *g_dev = to_msm_gpio_dev(chip);
@@ -539,9 +540,9 @@ static struct lock_class_key msm_gpio_lock_class;
 static int __devinit msm_gpio_probe(struct platform_device *pdev)
 {
 	int ret;
-#ifndef CONFIG_OF
+//#ifndef CONFIG_OF
 	int irq, i;
-#endif
+//#endif
 	msm_gpio.gpio_chip.dev = &pdev->dev;
 	spin_lock_init(&tlmm_lock);
 	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
@@ -551,7 +552,7 @@ static int __devinit msm_gpio_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-#ifndef CONFIG_OF
+//#ifndef CONFIG_OF
 	for (i = 0; i < msm_gpio.gpio_chip.ngpio; ++i) {
 		irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
 		irq_set_lockdep_class(irq, &msm_gpio_lock_class);
@@ -559,7 +560,7 @@ static int __devinit msm_gpio_probe(struct platform_device *pdev)
 					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID);
 	}
-#endif
+//#endif
 	ret = request_irq(TLMM_MSM_SUMMARY_IRQ, msm_summary_irq_handler,
 			IRQF_TRIGGER_HIGH, "msmgpio", NULL);
 	if (ret) {
@@ -571,11 +572,13 @@ static int __devinit msm_gpio_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if 0
 #ifdef CONFIG_OF
 static struct of_device_id msm_gpio_of_match[] __devinitdata = {
 	{.compatible = "qcom,msm-gpio", },
 	{ },
 };
+#endif
 #endif
 
 static int __devexit msm_gpio_remove(struct platform_device *pdev)
@@ -597,7 +600,7 @@ static struct platform_driver msm_gpio_driver = {
 	.driver = {
 		.name = "msmgpio",
 		.owner = THIS_MODULE,
-		.of_match_table = of_match_ptr(msm_gpio_of_match),
+//		.of_match_table = of_match_ptr(msm_gpio_of_match),
 	},
 };
 
@@ -613,6 +616,7 @@ static int __init msm_gpio_init(void)
 }
 postcore_initcall(msm_gpio_init);
 
+#if 0
 #ifdef CONFIG_OF
 static int msm_gpio_irq_domain_xlate(struct irq_domain *d,
 				     struct device_node *controller,
@@ -662,6 +666,7 @@ int __init msm_gpio_of_init(struct device_node *node,
 
 	return 0;
 }
+#endif
 #endif
 
 MODULE_AUTHOR("Gregory Bean <gbean@codeaurora.org>");
