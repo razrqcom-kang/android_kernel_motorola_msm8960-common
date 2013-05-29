@@ -3635,6 +3635,7 @@ static void update_heartbeat(struct work_struct *work)
 	int seconds = 0;
 	u8 temp;
 	int err;
+	bool chg_present = chip->usb_present || chip->dc_present;
 
 	wake_lock(&chip->heartbeat_wake_lock);
 

@@ -367,7 +367,6 @@ static struct platform_device android_pmem_adsp_device = {
 	.id = 2,
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
-#endif
 
 static struct android_pmem_platform_data android_pmem_audio_pdata = {
 	.name = "pmem_audio",
@@ -381,6 +380,7 @@ static struct platform_device android_pmem_audio_device = {
 	.id = 4,
 	.dev = { .platform_data = &android_pmem_audio_pdata },
 };
+#endif
 #endif
 
 struct fmem_platform_data fmem_pdata = {
@@ -498,8 +498,8 @@ static void __init size_pmem_devices(void)
 	}
 
 	android_pmem_pdata.size = pmem_size;
-#endif
 	android_pmem_audio_pdata.size = MSM_PMEM_AUDIO_SIZE;
+#endif
 #endif
 }
 
@@ -2283,8 +2283,8 @@ struct platform_device *common_devices[] __initdata = {
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-#endif
 	&android_pmem_audio_device,
+#endif
 #endif
 	&msm_device_vidc,
 	&msm_device_bam_dmux,
