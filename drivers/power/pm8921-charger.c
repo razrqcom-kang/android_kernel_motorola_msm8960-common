@@ -3619,6 +3619,7 @@ static void update_heartbeat(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct pm8921_chg_chip *chip = container_of(dwork,
 				struct pm8921_chg_chip, update_heartbeat_work);
+	bool chg_present = chip->usb_present || chip->dc_present;
 #ifdef CONFIG_PM8921_EXTENDED_INFO
 	struct pm8921_charger_platform_data *pdata =
 		chip->dev->platform_data;
@@ -3712,7 +3713,6 @@ static void update_heartbeat(struct work_struct *work)
 		}
 	}
 #endif
-	bool chg_present = chip->usb_present || chip->dc_present;
 
 	/* for battery health when charger is not connected */
 	if (chip->btc_override && !chg_present)
