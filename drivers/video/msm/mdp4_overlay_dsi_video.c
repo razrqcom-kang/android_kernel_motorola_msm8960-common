@@ -34,6 +34,9 @@
 #include "msm_fb.h"
 #include "mdp4.h"
 #include "mipi_dsi.h"
+#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
+#include "mipi_mot.h"
+#endif
 
 #include <mach/iommu_domains.h>
 
@@ -808,6 +811,9 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 	unsigned long flags;
 	int mixer = 0;
 	int undx, need_wait = 0;
+#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
+	struct mipi_mot_panel *mot_panel;
+#endif
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 
@@ -830,6 +836,15 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 		if (need_wait)
 			mdp4_dsi_video_wait4ov(0);
 	}
+
+#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
+	/*
+	 * Image fade away on video mode panel when suspend,
+	 * work it around by turning off panel to hide it
+	 */
+	mot_panel = mipi_mot_get_mot_panel();
+	mot_panel->panel_disable(mfd);
+#endif
 
 	mdp_histogram_ctrl_all(FALSE);
 

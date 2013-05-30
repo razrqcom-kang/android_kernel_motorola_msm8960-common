@@ -32,10 +32,10 @@ static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 	0x00, 0x14, 0x03, 0x00, 0x02, 0x00, 0x20, 0x00, 0x01 },
 };
 
-
 static char enter_sleep[2] = {DCS_CMD_ENTER_SLEEP_MODE, 0x00};
 static char exit_sleep[2] = {DCS_CMD_EXIT_SLEEP_MODE, 0x00};
 static char display_off[2] = {DCS_CMD_SET_DISPLAY_OFF, 0x00};
+static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char led_pwm1[2] = {DCS_CMD_SET_BRIGHTNESS, 0xFF};
 static char led_pwm2[2] = {DCS_CMD_SET_CABC, 0x03};
@@ -73,6 +73,10 @@ static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
+};
+
+static struct dsi_cmd_desc mot_cmd_vsync_cmd = {
+	DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_on), display_on
 };
 
 static struct dsi_cmd_desc mot_cmd_inverted_on_cmds[] = {
@@ -144,6 +148,8 @@ static struct dsi_cmd_desc mot_display_off_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(enter_sleep), enter_sleep},
 };
 
+static int panel_needs_turning_on;
+
 static int panel_enable(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *dsi_tx_buf;
@@ -188,7 +194,26 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 
 	mipi_dsi_cmds_tx(dsi_tx_buf, mot_cmd_scanline_cmds,
 				ARRAY_SIZE(mot_cmd_scanline_cmds));
+	panel_needs_turning_on = 1;
 	return 0;
+}
+
+static void panel_vsync_callback(struct msm_fb_data_type *mfd)
+{
+	if (panel_needs_turning_on)
+	{
+		struct dsi_buf *dsi_tx_buf;
+
+		if (mot_panel == NULL) {
+			pr_err("%s: Invalid mot_panel\n", __func__);
+			return;
+		}
+
+		dsi_tx_buf = mot_panel->mot_tx_buf;
+
+		mipi_dsi_cmds_tx(dsi_tx_buf, &mot_cmd_vsync_cmd, 1);
+		panel_needs_turning_on = 0;
+	}
 }
 
 static int panel_disable(struct msm_fb_data_type *mfd)
@@ -276,7 +301,7 @@ out:
 	pinfo->lcd.v_back_porch = 2;
 	pinfo->lcd.v_front_porch = 2;
 	pinfo->lcd.v_pulse_width = 2;
-	pinfo->lcd.refx100 = 5800; /* adjust refx100 to prevent tearing */
+	pinfo->lcd.refx100 = 6090; /* adjust refx100 to prevent tearing */
 
 	pinfo->mipi.mode = DSI_CMD_MODE;
 	pinfo->mipi.dst_format = DSI_CMD_DST_FORMAT_RGB888;
@@ -297,9 +322,12 @@ out:
 	pinfo->mipi.dsi_phy_db = &dsi_cmd_mode_phy_db;
 	pinfo->mipi.tx_eot_append = 0x01;
 	pinfo->mipi.rx_eot_ignore = 0;
+	pinfo->mipi.frame_rate = 60;
+	pinfo->mipi.esc_byte_ratio = 6;
 
 	mot_panel->panel_enable = panel_enable;
 	mot_panel->panel_disable = panel_disable;
+	mot_panel->vsync_callback = panel_vsync_callback;
 
 	/* For ESD detection information */
 	mot_panel->esd_enabled = true;
