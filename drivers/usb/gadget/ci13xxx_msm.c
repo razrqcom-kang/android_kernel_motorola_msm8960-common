@@ -181,7 +181,7 @@ static int ci13xxx_msm_probe(struct platform_device *pdev)
 
 	ret = udc_probe(&ci13xxx_msm_udc_driver, &pdev->dev, _udc_ctxt.regs);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "udc_probe failed\n");
+		dev_err(&pdev->dev, "udc_probe failed (%d)\n", ret);
 		goto iounmap;
 	}
 
