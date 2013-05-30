@@ -2319,6 +2319,7 @@ void msm8960_init_gsbi4(void)
 	if (IS_ERR(iface_clk))
 		pr_err("%s: Error getting gsbi4 clk\n", __func__);
 	else {
+		clk_prepare(iface_clk);
 		/* Enable the clock and leave it on */
 		clk_enable(iface_clk);
 		/* Write the protocol. */
