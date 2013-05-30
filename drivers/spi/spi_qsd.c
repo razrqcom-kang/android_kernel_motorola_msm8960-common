@@ -44,6 +44,8 @@
 #include <linux/pm_runtime.h>
 #include "spi_qsd.h"
 
+#define CONFIG_SPI_IGNORE_DEVTREE 1
+
 static int msm_spi_pm_resume_runtime(struct device *device);
 static int msm_spi_pm_suspend_runtime(struct device *device);
 
@@ -1908,7 +1910,9 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	int                     clk_enabled = 0;
 	int                     pclk_enabled = 0;
 	struct msm_spi_platform_data *pdata;
+#ifndef CONFIG_SPI_IGNORE_DEVTREE
 	enum of_gpio_flags flags;
+#endif
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct msm_spi));
 	if (!master) {
@@ -1925,6 +1929,8 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, master);
 	dd = spi_master_get_devdata(master);
 
+// For MOT ignore of_node
+#ifndef CONFIG_SPI_IGNORE_DEVTREE
 	if (pdev->dev.of_node) {
 		dd->qup_ver = SPI_QUP_VERSION_BFAM;
 		master->dev.of_node = pdev->dev.of_node;
@@ -1954,6 +1960,7 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 			dd->cs_gpios[i].valid = 0;
 		}
 	} else {
+#endif
 		pdata = pdev->dev.platform_data;
 		dd->qup_ver = SPI_QUP_VERSION_NONE;
 
@@ -1970,7 +1977,9 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 							resource->start : -1;
 			dd->cs_gpios[i].valid = 0;
 		}
+#ifndef CONFIG_SPI_IGNORE_DEVTREE
 	}
+#endif
 
 	dd->pdata = pdata;
 	resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
