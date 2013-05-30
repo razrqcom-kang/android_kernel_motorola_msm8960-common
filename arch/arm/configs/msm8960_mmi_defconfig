@@ -1951,7 +1951,7 @@ CONFIG_W1=y
 # CONFIG_W1_MASTER_DS2490 is not set
 # CONFIG_W1_MASTER_DS2482 is not set
 # CONFIG_W1_MASTER_DS1WM is not set
-# CONFIG_W1_MASTER_GPIO is not set
+CONFIG_W1_MASTER_GPIO=y
 
 #
 # 1-wire Slaves
