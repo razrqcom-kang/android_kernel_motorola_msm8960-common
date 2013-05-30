@@ -32,6 +32,8 @@
 #include <linux/mutex.h>
 #include <linux/rtc.h>
 
+#define TEMP_BOOT_HACK 1
+
 #define BMS_CONTROL		0x224
 #define BMS_S1_DELAY		0x225
 #define BMS_OUTPUT0		0x230
@@ -239,7 +241,11 @@ module_param_cb(last_soc, &bms_param_ops, &last_soc, 0644);
  * of a real battery. This makes the bms driver report a different/fake value
  * regardless of the calculated state of charge.
  */
+#ifdef TEMP_BOOT_HACK
+static int bms_fake_battery = 80; // FIXME-HASH: CHANGED FOR BOOT TESTING
+#else
 static int bms_fake_battery = -EINVAL;
+#endif
 module_param(bms_fake_battery, int, 0644);
 
 /* bms_start_XXX and bms_end_XXX are read only */
@@ -392,6 +398,8 @@ static void pm8921_bms_disable_irq(struct pm8921_bms_chip *chip, int interrupt)
 static int pm_bms_masked_write(struct pm8921_bms_chip *chip, u16 addr,
 							u8 mask, u8 val)
 {
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	int rc;
 	u8 reg;
 
@@ -407,6 +415,7 @@ static int pm_bms_masked_write(struct pm8921_bms_chip *chip, u16 addr,
 		pr_err("write failed addr = %03X, rc = %d\n", addr, rc);
 		return rc;
 	}
+#endif
 	return 0;
 }
 
@@ -603,7 +612,7 @@ static int pm_bms_read_output_data(struct pm8921_bms_chip *chip, int type,
 						int16_t *result)
 {
 	int rc;
-	u8 reg;
+//	u8 reg;
 
 	if (!result) {
 		pr_err("result pointer null\n");
@@ -617,6 +626,8 @@ static int pm_bms_read_output_data(struct pm8921_bms_chip *chip, int type,
 
 	rc = pm_bms_masked_write(chip, BMS_CONTROL, SELECT_OUTPUT_DATA,
 					type << SELECT_OUTPUT_TYPE_SHIFT);
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	if (rc) {
 		pr_err("fail to select %d type in BMS_CONTROL rc = %d\n",
 						type, rc);
@@ -638,6 +649,7 @@ static int pm_bms_read_output_data(struct pm8921_bms_chip *chip, int type,
 	}
 	*result |= reg << 8;
 	pr_debug("type %d result %x", type, *result);
+#endif
 	return 0;
 }
 
@@ -1148,6 +1160,8 @@ static int get_rbatt(struct pm8921_bms_chip *chip, int soc_rbatt, int batt_temp)
 static int calculate_fcc_uah(struct pm8921_bms_chip *chip, int batt_temp,
 							int chargecycles)
 {
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	int initfcc, result, scalefactor = 0;
 #ifdef CONFIG_PM8921_FLOAT_CHARGE
 	chip->adjusted_fcc_temp_lut = NULL;
@@ -1175,6 +1189,8 @@ static int calculate_fcc_uah(struct pm8921_bms_chip *chip, int batt_temp,
 		return 1000 * interpolate_fcc(chip->adjusted_fcc_temp_lut,
 				batt_temp);
 	}
+#endif
+	return 1000;
 }
 
 static int get_battery_uvolts(struct pm8921_bms_chip *chip, int *uvolts)
@@ -1262,16 +1278,17 @@ static void calculate_cc_uah(struct pm8921_bms_chip *chip, int cc, int *val)
 
 int pm8921_bms_cc_uah(int *cc_uah)
 {
-	int cc;
+//	int cc;
 
 	*cc_uah = 0;
-
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	if (!the_chip)
 		return -EINVAL;
 
 	read_cc(the_chip, &cc);
 	calculate_cc_uah(the_chip, cc, cc_uah);
-
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(pm8921_bms_cc_uah);
@@ -2733,10 +2750,12 @@ EXPORT_SYMBOL(pm8921_bms_get_vsense_avg);
 
 int pm8921_bms_get_battery_current(int *result_ua)
 {
-	int vsense_uv;
+//	int vsense_uv;
 	int rc = 0;
 
 	*result_ua = 0;
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	if (!the_chip) {
 		pr_err("called before initialization\n");
 		return -EINVAL;
@@ -2761,6 +2780,7 @@ int pm8921_bms_get_battery_current(int *result_ua)
 	pr_debug("ibat=%duA\n", *result_ua);
 
 error_vsense:
+#endif
 	return rc;
 }
 EXPORT_SYMBOL(pm8921_bms_get_battery_current);

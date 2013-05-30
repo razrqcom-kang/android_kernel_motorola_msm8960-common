@@ -15,6 +15,8 @@
 #include <linux/module.h>
 #include <linux/mfd/pm8xxx/batterydata-lib.h>
 
+#define TEMP_BOOT_HACK 1
+
 int linear_interpolate(int y0, int x0, int y1, int x1, int x)
 {
 	if (y0 == y1 || x == x0)
@@ -34,6 +36,8 @@ int is_between(int left, int right, int value)
 	return 0;
 }
 
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 static int interpolate_single_lut(struct single_row_lut *lut, int x)
 {
 	int i, result;
@@ -64,17 +68,24 @@ static int interpolate_single_lut(struct single_row_lut *lut, int x)
 	}
 	return result;
 }
+#endif
 
 int interpolate_fcc(struct single_row_lut *fcc_temp_lut, int batt_temp)
 {
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	/* batt_temp is in tenths of degC - convert it to degC for lookups */
 	batt_temp = batt_temp/10;
 	return interpolate_single_lut(fcc_temp_lut, batt_temp);
+#endif
+	return 1;
 }
 
 int interpolate_scalingfactor_fcc(struct single_row_lut *fcc_sf_lut,
 		int cycles)
 {
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 	/*
 	 * sf table could be null when no battery aging data is available, in
 	 * that case return 100%
@@ -82,6 +93,7 @@ int interpolate_scalingfactor_fcc(struct single_row_lut *fcc_sf_lut,
 	if (fcc_sf_lut)
 		return interpolate_single_lut(fcc_sf_lut, cycles);
 	else
+#endif
 		return 100;
 }
 
