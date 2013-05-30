@@ -1753,11 +1753,10 @@ static void init_sysfs_extended_baseband(void){
 static struct platform_device *mmi_devices[] __initdata = {
 	&msm8960_w1_gpio_device,
 	&msm_8960_q6_lpass,
-	&msm_8960_q6_mss_fw,
-	&msm_8960_q6_mss_sw,
 	&msm_8960_riva,
-	&msm_pil_vidc,
 	&msm_pil_tzapps,
+	&msm_pil_dsps,
+	&msm_pil_vidc,
 	&msm8960_device_otg,
 	&msm8960_device_gadget_peripheral,
 	&msm_device_hsusb_host,
@@ -1776,11 +1775,6 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_cpudai_auxpcm_tx,
 	&msm_cpu_fe,
 	&msm_stub_codec,
-	&msm_kgsl_3d0,
-#ifdef CONFIG_MSM_KGSL_2D 			/* OpenVG support */
-	&msm_kgsl_2d0,
-	&msm_kgsl_2d1,
-#endif
 #ifdef CONFIG_MSM_GEMINI  			/* Inline JPEG engine */
 	&msm8960_gemini_device,
 #endif
@@ -3138,6 +3132,7 @@ static void __init msm8960_mmi_init(void)
 		pr_err("Failed to initialize XO votes\n");
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_clock_init_data);
+	msm8960_init_usb();
 
 	config_mdp_vsync_from_dt();
 	gpiomux_init(use_mdp_vsync);
@@ -3146,6 +3141,7 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_hdmi(&hdmi_msm_device);
 #endif
 
+	load_pm8921_gpios_from_dt();
 	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 45,
 		    reboot_ptr, battery_data_is_meter_locked(),
 		    get_hot_temp_dt(),  get_hot_offset_dt(),
@@ -3173,15 +3169,13 @@ static void __init msm8960_mmi_init(void)
 				     msm8960_num_footswitch);
 	}
 
-	msm_device_smd.dev.platform_data = &mmi_unit_info_v1;
+	((struct smd_platform *)msm_device_smd.dev.platform_data)->custom_data = &mmi_unit_info_v1;
 	msm8960_add_common_devices();
 
-	load_pm8921_gpios_from_dt();
 	pm8921_mpps_w1_adjust_from_dt();
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 	                     pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 	mot_init_factory_kill();
-	msm8960_init_usb();
 
 	mot_init_emu_detection(otg_control_data);
 
@@ -3212,10 +3206,7 @@ static void __init msm8960_mmi_init(void)
 		msm8960_init_gsbi4();
 	sysfs_factory_gsbi12_mode_init();
 
-	msm8960_pm_init(RPM_APCC_CPU0_WAKE_UP_IRQ);
 	mot_tcmd_export_gpio();
-	// FIXME-HASH: Not sure if this needs to be replaced with anything
-	// change_memory_power = &msm8960_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
 
 	init_mmi_unit_info();

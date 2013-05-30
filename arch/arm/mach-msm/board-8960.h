@@ -201,7 +201,6 @@ extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk0;
 extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk1;
 extern struct platform_device hdmi_msm_device;
 extern struct platform_device android_usb_device;
-extern struct platform_device msm_tsens_device;
 
 extern struct msm_otg_platform_data msm_otg_pdata;
 
@@ -236,7 +235,6 @@ extern void __init pm8921_gpio_mpp_init(struct pm8xxx_gpio_init *pm8921_gpios,
 									struct pm8xxx_mpp_init *pm8921_mpps,
 									unsigned mpp_size);
 extern void __init msm8960_init_slim(void);
-extern void __init msm8960_pm_init(unsigned wakeup_irq);
 extern void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
 			       int mode, int cool_temp, int warm_temp, void *cb,
 			       int lock, int hot_temp, int hot_temp_offset,

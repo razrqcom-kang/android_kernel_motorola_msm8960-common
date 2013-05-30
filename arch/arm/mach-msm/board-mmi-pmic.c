@@ -921,17 +921,6 @@ void __init pm8921_gpio_mpp_init(struct pm8xxx_gpio_init *pm8921_gpios,
 	}
 }
 
-void __init msm8960_pm_init(unsigned wakeup_irq)
-{
-// FIXME-HASH: Don't do this anymore?
-#if 0
-	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
-	msm_pm_set_rpm_wakeup_irq(wakeup_irq);
-	msm_cpuidle_set_states(msm_cstates, ARRAY_SIZE(msm_cstates),
-				msm_pm_data);
-#endif
-}
-
 void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
 			int mode, int cool_temp, int warm_temp,
 			void *cb, int lock, int hot_temp, int hot_temp_offset,

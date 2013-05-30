@@ -42,6 +42,7 @@
 #include <linux/ks8851.h>
 #include <linux/memory.h>
 #include <linux/memblock.h>
+#include <linux/smsc3503.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -406,16 +407,15 @@ struct platform_device msm_device_dspcrashd_8960 = {
 	.dev = { .platform_data = &dspcrashd_pdata_8960 },
 };
 
-#define MMI_PERSISTENT_RAM_BASE    0xbf700000
-#define MMI_PERSISTENT_RAM_SIZE    SZ_1M
-#define MMI_RAM_CONSOLE_SIZE       (124*SZ_1K * 2)
+#define MMI_PERSISTENT_RAM_BASE    0xbe500000
+#define MMI_PERSISTENT_RAM_SIZE    (SZ_2M)
 
 #ifdef CONFIG_ANDROID_PERSISTENT_RAM
 struct persistent_ram_descriptor pram_descs[] = {
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 	{
 		.name = "ram_console",
-		.size = MMI_RAM_CONSOLE_SIZE,
+		.size = MMI_PERSISTENT_RAM_SIZE,
 	},
 #endif
 };
@@ -1528,6 +1528,126 @@ static struct platform_device msm_device_wcnss_wlan = {
 	.dev		= {.platform_data = &qcom_wcnss_pdata},
 };
 
+#ifdef CONFIG_QSEECOM
+/* qseecom bus scaling */
+static struct msm_bus_vectors qseecom_clks_init_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPDM,
+		.dst = MSM_BUS_SLAVE_SPDM,
+		.ib = 0,
+		.ab = 0,
+	},
+};
+
+static struct msm_bus_vectors qseecom_enable_dfab_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ib = (492 * 8) * 1000000UL,
+		.ab = (492 * 8) *  100000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = (492 * 8) * 1000000UL,
+		.ab = (492 * 8) * 100000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPDM,
+		.dst = MSM_BUS_SLAVE_SPDM,
+		.ib = 0,
+		.ab = 0,
+	},
+};
+
+static struct msm_bus_vectors qseecom_enable_sfpb_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPDM,
+		.dst = MSM_BUS_SLAVE_SPDM,
+		.ib = (64 * 8) * 1000000UL,
+		.ab = (64 * 8) *  100000UL,
+	},
+};
+
+static struct msm_bus_vectors qseecom_enable_dfab_sfpb_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ib = (492 * 8) * 1000000UL,
+		.ab = (492 * 8) *  100000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = (492 * 8) * 1000000UL,
+		.ab = (492 * 8) * 100000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPDM,
+		.dst = MSM_BUS_SLAVE_SPDM,
+		.ib = (64 * 8) * 1000000UL,
+		.ab = (64 * 8) *  100000UL,
+	},
+};
+
+static struct msm_bus_paths qseecom_hw_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(qseecom_clks_init_vectors),
+		qseecom_clks_init_vectors,
+	},
+	{
+		ARRAY_SIZE(qseecom_enable_dfab_vectors),
+		qseecom_enable_dfab_vectors,
+	},
+	{
+		ARRAY_SIZE(qseecom_enable_sfpb_vectors),
+		qseecom_enable_sfpb_vectors,
+	},
+	{
+		ARRAY_SIZE(qseecom_enable_dfab_sfpb_vectors),
+		qseecom_enable_dfab_sfpb_vectors,
+	},
+};
+
+static struct msm_bus_scale_pdata qseecom_bus_pdata = {
+	qseecom_hw_bus_scale_usecases,
+	ARRAY_SIZE(qseecom_hw_bus_scale_usecases),
+	.name = "qsee",
+};
+
+static struct platform_device qseecom_device = {
+	.name		= "qseecom",
+	.id		= 0,
+	.dev		= {
+		.platform_data = &qseecom_bus_pdata,
+	},
+};
+#endif
+
 #if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
 		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE) || \
 		defined(CONFIG_CRYPTO_DEV_QCEDEV) || \
@@ -2098,6 +2218,16 @@ struct msm_otg_platform_data msm_otg_pdata = {
 	.disable_reset_on_disconnect = true,
 };
 
+#ifdef CONFIG_USB_EHCI_MSM_HSIC
+#define HSIC_HUB_RESET_GPIO	91
+static struct msm_hsic_host_platform_data msm_hsic_pdata = {
+	.strobe		= 150,
+	.data		= 151,
+};
+#else
+static struct msm_hsic_host_platform_data msm_hsic_pdata;
+#endif
+
 static struct android_usb_platform_data android_usb_pdata = {
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
 };
@@ -2117,6 +2247,11 @@ static struct tsens_platform_data msm_tsens_pdata  = {
 		.tsens_num_sensor	= 5,
 };
 
+static struct platform_device msm_tsens_device = {
+	.name   = "tsens8960-tm",
+	.id = -1,
+};
+
 void __init msm8960_init_tsens(void)
 {
 	msm_tsens_early_init(&msm_tsens_pdata);
@@ -2128,6 +2263,7 @@ void __init msm8960_init_usb(void)
 	msm_otg_pdata.vbus_power = NULL;
 	msm8960_device_otg.dev.platform_data = &msm_otg_pdata;
 	android_usb_pdata.swfi_latency = msm_rpmrs_levels[0].latency_us;
+	msm_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
 }
 
 /* Sensors DSPS platform data */
@@ -2143,17 +2279,17 @@ void __init msm8960_init_dsps(void)
 {
 #ifdef CONFIG_MSM_DSPS
 	struct clk *hclk;
+	void *gsbi_ctrl;
+
 	struct msm_dsps_platform_data *pdata =
 		msm_dsps_device.dev.platform_data;
-
-	void *gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
-
 	pdata->pil_name = DSPS_PIL_GENERIC_NAME;
 	pdata->gpios = NULL;
 	pdata->gpios_num = 0;
 
 	platform_device_register(&msm_dsps_device);
 
+	gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
 	/* Enable GSBI12_HCLK */
 	hclk = clk_get_sys("dsps_hclk", "iface_clk");
 	if (IS_ERR(hclk))
@@ -2262,6 +2398,9 @@ struct platform_device *common_devices[] __initdata = {
 #endif
 	&msm_slim_ctrl,
 	&msm_device_wcnss_wlan,
+#if defined(CONFIG_QSEECOM)
+	&qseecom_device,
+#endif
 #if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
 		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE)
 	&qcrypto_device,
@@ -2321,9 +2460,15 @@ struct platform_device *common_devices[] __initdata = {
 	&msm_rtb_device,
 #endif
 	&msm8960_device_cache_erp,
+	&msm8960_device_ebi1_ch0_erp,
+	&msm8960_device_ebi1_ch1_erp,
 #ifdef CONFIG_MSM_CACHE_DUMP
 	&msm_cache_dump_device,
 #endif
+	&msm8960_iommu_domain_device,
+	&msm_tsens_device,
+	&msm8960_pc_cntr,
+	&msm8960_cpu_slp_status,
 #if 0
 	&msm8960_cpu_idle_device,
 	&msm8960_msm_gov_device,
