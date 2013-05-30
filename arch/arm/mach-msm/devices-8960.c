@@ -100,6 +100,8 @@
 #define MSM_GSBI12_QUP_PHYS	(MSM_GSBI12_PHYS + 0x20000)
 #define MSM_QUP_SIZE		SZ_4K
 
+#define MSM_GSBI4_I2C_SDA	20
+#define MSM_GSBI4_I2C_SCL	21
 #define MSM_GSBI10_I2C_SDA	73
 #define MSM_GSBI10_I2C_SCL	74
 #define MSM_GSBI12_I2C_SDA	44
@@ -1809,16 +1811,16 @@ static struct resource resources_qup_i2c_gsbi4[] = {
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "i2c_clk",
-		.start	= MSM_GSBI12_I2C_SCL,
-		.end	= MSM_GSBI12_I2C_SCL,
-		.flags	= IORESOURCE_IO,
+		.name   = "i2c_clk",
+		.start  = MSM_GSBI4_I2C_SCL,
+		.end    = MSM_GSBI4_I2C_SCL,
+		.flags  = IORESOURCE_IO,
 	},
 	{
-		.name	= "i2c_sda",
-		.start	= MSM_GSBI12_I2C_SDA,
-		.end	= MSM_GSBI12_I2C_SDA,
-		.flags	= IORESOURCE_IO,
+		.name   = "i2c_sda",
+		.start  = MSM_GSBI4_I2C_SDA,
+		.end    = MSM_GSBI4_I2C_SDA,
+		.flags  = IORESOURCE_IO,
 	},
 };
 
