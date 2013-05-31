@@ -819,8 +819,6 @@ static int get_batt_temp(struct pm8921_bms_chip *chip, int *batt_temp)
 int override_mode_simultaneous_battery_voltage_and_current(int *ibat_ua,
 								int *vbat_uv)
 {
-// FIXME-HASH: REMOVED FOR BOOT TESTING
-#ifndef TEMP_BOOT_HACK
 	int16_t vsense_raw;
 	int16_t vbat_raw;
 	int vsense_uv;
@@ -857,7 +855,6 @@ int override_mode_simultaneous_battery_voltage_and_current(int *ibat_ua,
 			" ibat_ua = %d vbat_uv = %d\n",
 			(uint16_t)vsense_raw, (uint16_t)vbat_raw,
 			*ibat_ua, *vbat_uv);
-#endif
 	return 0;
 }
 
@@ -2838,8 +2835,6 @@ EXPORT_SYMBOL_GPL(pm8921_bms_get_aged_capacity);
 
 void pm8921_bms_charging_began(void)
 {
-// FIXME-HASH: REMOVED FOR BOOT TESTING
-#ifndef TEMP_BOOT_HACK
 	struct pm8921_soc_params raw;
 	int batt_temp;
 
@@ -2865,7 +2860,6 @@ void pm8921_bms_charging_began(void)
 	the_chip->soc_at_cv = -EINVAL;
 	the_chip->prev_chg_soc = -EINVAL;
 	pr_debug("start_percent = %u%%\n", the_chip->start_percent);
-#endif
 }
 EXPORT_SYMBOL_GPL(pm8921_bms_charging_began);
 
