@@ -612,9 +612,7 @@ static int pm_bms_read_output_data(struct pm8921_bms_chip *chip, int type,
 						int16_t *result)
 {
 	int rc;
-#ifndef TEMP_BOOT_HACK
-	u8 reg;
-#endif
+//	u8 reg;
 
 	if (!result) {
 		pr_err("result pointer null\n");
@@ -1280,9 +1278,7 @@ static void calculate_cc_uah(struct pm8921_bms_chip *chip, int cc, int *val)
 
 int pm8921_bms_cc_uah(int *cc_uah)
 {
-#ifndef TEMP_BOOT_HACK
-	int cc;
-#endif
+//	int cc;
 
 	*cc_uah = 0;
 // FIXME-HASH: REMOVED FOR BOOT TESTING
@@ -2754,9 +2750,7 @@ EXPORT_SYMBOL(pm8921_bms_get_vsense_avg);
 
 int pm8921_bms_get_battery_current(int *result_ua)
 {
-#ifndef TEMP_BOOT_HACK
-	int vsense_uv;
-#endif
+//	int vsense_uv;
 	int rc = 0;
 
 	*result_ua = 0;
