@@ -1753,6 +1753,8 @@ static void init_sysfs_extended_baseband(void){
 static struct platform_device *mmi_devices[] __initdata = {
 	&msm8960_w1_gpio_device,
 	&msm_8960_q6_lpass,
+	&msm_8960_q6_mss_fw,
+	&msm_8960_q6_mss_sw,
 	&msm_8960_riva,
 	&msm_pil_tzapps,
 	&msm_pil_dsps,
