@@ -51,7 +51,7 @@ static inline int is_emergency_dump(void) { return 0; }
 static inline void emergency_dump(void) {}
 static inline void apanic_mmc_parition_add(struct hd_struct *part) {}
 static inline void apanic_mmc_parition_remove(struct hd_struct *part) {}
-static inline int apanic_mmc_annotate(const char *annotation) {}
+static inline int apanic_mmc_annotate(const char *annotation) { return 0; }
 
 static inline int apanic_mmc_init(struct raw_mmc_panic_ops *panic_ops)
 {
