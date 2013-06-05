@@ -209,7 +209,7 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	mot_panel->is_valid_manufacture_id = is_valid_manufacture_id;
 	mot_panel->is_valid_power_mode = is_valid_power_mode;
 
-	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_720P_PT);
+	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_HD);
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
 
