@@ -593,6 +593,7 @@ static int mmc_clock_enable_disable(unsigned id, unsigned enable)
 		sdc_clk = clk_get(&(msm_device_sdc1.dev), "core_clk");
 
 		if (sdc_clk) {
+			clk_prepare(sdc_clk);
 			if (enable)
 				clk_enable(sdc_clk);
 			else
@@ -603,6 +604,7 @@ static int mmc_clock_enable_disable(unsigned id, unsigned enable)
 		sdc_clk = clk_get(&(msm_device_sdc1.dev), "iface_clk");
 
 		if (sdc_clk) {
+			clk_prepare(sdc_clk);
 			if (enable)
 				clk_enable(sdc_clk);
 			else
