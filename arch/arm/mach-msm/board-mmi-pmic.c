@@ -649,11 +649,22 @@ static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 #ifdef CONFIG_MACH_MSM8960_MMI
 // FIXME-HASH: new PMIC code from caf, all * NEW * need to be vetted
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
-	.r_sense_uohm		= 10000,
-	.i_test			= 0,
-	.v_cutoff		= 3200, /* was v_failure (3200) where voltage == battery empty */
-	.max_voltage_uv		= MAX_VOLTAGE_MV * 1000,
-	.shutdown_soc_valid_limit= 20, /* NEW */
+	.battery_type			= BATT_UNKNOWN,
+	.r_sense_uohm			= 10000,
+	.v_cutoff			= 3200, /* was v_failure (3200) where voltage == battery empty */
+	.i_test				= 0,
+	.max_voltage_uv			= MAX_VOLTAGE_MV * 1000,
+	.rconn_mohm			= 18,
+	.shutdown_soc_valid_limit	= 20,
+	.adjust_soc_low_threshold	= 25,
+	.chg_term_ua			= CHG_TERM_MA * 1000,
+	.normal_voltage_calc_ms		= 20000,
+	.low_voltage_calc_ms		= 1000,
+	.alarm_low_mv			= 3400,
+	.alarm_high_mv			= 4000,
+	.high_ocv_correction_limit_uv	= 50,
+	.low_ocv_correction_limit_uv	= 100,
+	.hold_soc_est			= 3,
 #ifdef CONFIG_PM8921_EXTENDED_INFO
 	.get_batt_info          = read_mmi_battery_bms,
 #endif
