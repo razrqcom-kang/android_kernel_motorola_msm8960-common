@@ -19,6 +19,8 @@
 
 #include "power_supply.h"
 
+//#define REPORT_MISSING_PROPERTIES 1
+
 /*
  * This is because the name "current" breaks the device attr macro.
  * The "current" word resolves to "(get_current())" so instead of
@@ -82,8 +84,10 @@ static ssize_t power_supply_show_property(struct device *dev,
 			dev_dbg(dev, "driver has no data for `%s' property\n",
 				attr->attr.name);
 		else if (ret != -ENODEV)
+#ifdef REPORT_MISSING_PROPERTIES
 			dev_err(dev, "driver failed to report `%s' property: %zd\n",
 				attr->attr.name, ret);
+#endif
 		return ret;
 	}
 
