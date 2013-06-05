@@ -30,6 +30,8 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-ctrls.h>
 
+#define TEMP_BOOT_HACK 1
+
 int v4l2_device_register(struct device *dev, struct v4l2_device *v4l2_dev)
 {
 	if (v4l2_dev == NULL)
@@ -141,6 +143,8 @@ EXPORT_SYMBOL_GPL(v4l2_device_unregister);
 int v4l2_device_register_subdev(struct v4l2_device *v4l2_dev,
 				struct v4l2_subdev *sd)
 {
+// FIXME-HASH: REMOVED FOR BOOT TESTING
+#ifndef TEMP_BOOT_HACK
 #if defined(CONFIG_MEDIA_CONTROLLER)
 	struct media_entity *entity = &sd->entity;
 #endif
@@ -190,6 +194,7 @@ int v4l2_device_register_subdev(struct v4l2_device *v4l2_dev,
 	spin_lock(&v4l2_dev->lock);
 	list_add_tail(&sd->list, &v4l2_dev->subdevs);
 	spin_unlock(&v4l2_dev->lock);
+#endif
 
 	return 0;
 }
