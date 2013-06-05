@@ -3055,6 +3055,8 @@ static int mdp_probe(struct platform_device *pdev)
 		}
 
 #endif
+		mfd->reg_write = mipi_reg_write;
+		mfd->reg_read = mipi_reg_read;
 		if (mdp_rev >= MDP_REV_40)
 			mfd->cursor_update = mdp_hw_cursor_sync_update;
 		else
@@ -3097,6 +3099,8 @@ static int mdp_probe(struct platform_device *pdev)
 		INIT_WORK(&mfd->dma_update_worker,
 			mdp_lcd_update_workqueue_handler);
 #endif
+		mfd->reg_write = mipi_reg_write;
+		mfd->reg_read = mipi_reg_read;
 		mdp_config_vsync(mdp_init_pdev, mfd);
 		break;
 #endif
