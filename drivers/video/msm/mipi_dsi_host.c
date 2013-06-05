@@ -960,6 +960,12 @@ void mipi_set_tx_power_mode(int mode)
 	MIPI_OUTP(MIPI_DSI_BASE + 0x38, data);
 }
 
+int mipi_get_tx_power_mode(void)
+{
+	uint32 data = MIPI_INP(MIPI_DSI_BASE + 0x38);
+	return !!(data & BIT(26));
+}
+
 void mipi_dsi_sw_reset(void)
 {
 	MIPI_OUTP(MIPI_DSI_BASE + 0x114, 0x01);
@@ -1863,4 +1869,152 @@ irqreturn_t mipi_dsi_isr(int irq, void *ptr)
 
 
 	return IRQ_HANDLED;
+}
+
+int mipi_reg_write(struct msm_fb_data_type *mfd, __u16 size, __u8 *buf,
+	__u8 use_hs_mode)
+{
+	static struct dsi_buf mot_tx_buf;
+	int old_tx_mode, new_tx_mode;
+
+	struct dsi_cmd_desc reg_write_cmd = {
+		.dtype = DTYPE_DCS_LWRITE,
+		.last = 1,
+		.vc = 0,
+		.ack = 0,
+		.wait = 0,
+		.dlen = size,
+		.payload = buf
+	};
+
+	pr_debug("%s addr %02x size %d hs %d\n", __func__, (__u32)buf[0],
+		(__s32)size, (__s32)use_hs_mode);
+
+	if (!mot_tx_buf.start) {
+		mipi_dsi_buf_alloc(&mot_tx_buf, DSI_BUF_SIZE);
+	}
+
+	mutex_lock(&mfd->dma->ov_mutex);
+
+	old_tx_mode = mipi_get_tx_power_mode();
+	new_tx_mode = !use_hs_mode;
+
+	if (old_tx_mode != new_tx_mode) {
+		pr_debug("%s setting new tx mode %d\n", __func__,
+			(__s32)new_tx_mode);
+		mipi_set_tx_power_mode(new_tx_mode);
+	}
+
+	mipi_dsi_cmds_tx(&mot_tx_buf, &reg_write_cmd, 1);
+
+	if (old_tx_mode != new_tx_mode) {
+		pr_debug("%s restoring old tx mode %d\n", __func__,
+			(__s32)old_tx_mode);
+		mipi_set_tx_power_mode(old_tx_mode);
+	}
+
+	mutex_unlock(&mfd->dma->ov_mutex);
+
+	pr_debug("%s done!\n", __func__);
+
+	return 0;
+}
+
+int mipi_reg_read(struct msm_fb_data_type *mfd, __u16 address,
+	__u16 size, __u8 *buf, __u8 use_hs_mode)
+{
+	static struct dsi_buf rp, tp;
+	static int once = 1;
+	int old_tx_mode, new_tx_mode;
+
+	__u8 cmd_buf[2] = {(__u8)address, 0};
+
+	struct dsi_cmd_desc reg_read_cmd = {
+		.dtype = DTYPE_DCS_READ,
+		.last = 1,
+		.vc = 0,
+		.ack = 1,
+		.wait = 1,
+		.dlen = 2,
+		.payload = cmd_buf
+	};
+
+	pr_debug("%s addr %02x size %d hs %d\n", __func__, (__u32)address,
+		(__s32)size, (__s32)use_hs_mode);
+
+	if (once) {
+		once = 0;
+		mipi_dsi_buf_alloc(&rp, DSI_BUF_SIZE);
+		mipi_dsi_buf_alloc(&tp, DSI_BUF_SIZE);
+	}
+
+	mutex_lock(&mfd->dma->ov_mutex);
+
+//	mdp4_dsi_cmd_dma_busy_wait(mfd);
+//	mipi_dsi_mdp_busy_wait(mfd);
+//	mdp4_dsi_blt_dmap_busy_wait(mfd);
+
+	old_tx_mode = mipi_get_tx_power_mode();
+	new_tx_mode = !use_hs_mode;
+	if (old_tx_mode != new_tx_mode) {
+		pr_debug("%s setting new tx mode %d\n", __func__,
+			(__s32)new_tx_mode);
+		mipi_set_tx_power_mode(new_tx_mode);
+	}
+
+	mipi_dsi_cmds_rx(mfd, &tp, &rp, &reg_read_cmd, size);
+
+	if (old_tx_mode != new_tx_mode) {
+		pr_debug("%s restoring old tx mode %d\n", __func__,
+			(__s32)old_tx_mode);
+		mipi_set_tx_power_mode(old_tx_mode);
+	}
+
+	memcpy(buf, rp.data, size);
+
+	mutex_unlock(&mfd->dma->ov_mutex);
+
+	pr_debug("%s done!\n", __func__);
+
+	return 0;
+}
+
+static void dsi_reg_range_dump(int offset, int range)
+{
+	uint32 i, addr_start, addr;
+	addr_start = (uint32)MIPI_DSI_BASE + offset;
+	for (i = 0; i < range ;) {
+		addr = addr_start + i;
+		pr_err("0x%8x:%08x %08x %08x %08x %08x %08x %08x %08x\n",
+			(uint32)(addr),
+			(uint32)inpdw(addr), (uint32)inpdw(addr + 4),
+			(uint32)inpdw(addr + 8), (uint32)inpdw(addr + 12),
+			(uint32)inpdw(addr + 16), (uint32)inpdw(addr + 20),
+			(uint32)inpdw(addr + 24), (uint32)inpdw(addr + 28));
+		i += 32;
+	}
+}
+
+static bool dump_dsi_regs;
+void mipi_dsi_regs_dump(void)
+{
+	if (dump_dsi_regs == false) {
+		mipi_dsi_turn_on_clks();
+		pr_err("------- DSI Regs dump starts ------\n");
+		dsi_reg_range_dump(0, 0xcc);
+		dsi_reg_range_dump(0x108, 0x20);
+		dsi_reg_range_dump(0x190, 0xc8);
+		dsi_reg_range_dump(0x280, 0x10);
+		dsi_reg_range_dump(0x440, 0xb0);
+		dsi_reg_range_dump(0x500, 0x5c);
+		pr_err("------- DSI Regs dump done ------\n");
+
+		dump_dsi_regs = true;
+		mipi_dsi_turn_off_clks();
+	}
+}
+
+void mipi_dsi_clear_dump_flag(void)
+{
+	dump_dsi_regs = false;
 }
