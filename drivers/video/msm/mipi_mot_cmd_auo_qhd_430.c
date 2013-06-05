@@ -333,7 +333,7 @@ out:
 	mot_panel->esd_enabled = true;
 	mot_panel->is_valid_manufacture_id = is_valid_manufacture_id;
 
-	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_QHD_PT);
+	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_HD);
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
 
