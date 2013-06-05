@@ -2125,7 +2125,7 @@ static void read_shutdown_soc_and_iavg(struct pm8921_bms_chip *chip)
 		chip->shutdown_iavg_ua = 0;
 	}
 
-	pr_debug("shutdown_soc = %d shutdown_iavg = %d shutdown_soc_invalid = %d\n",
+	pr_info("shutdown_soc = %d shutdown_iavg = %d shutdown_soc_invalid = %d\n",
 			chip->shutdown_soc,
 			chip->shutdown_iavg_ua,
 			shutdown_soc_invalid);
