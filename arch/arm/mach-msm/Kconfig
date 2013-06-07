@@ -2663,12 +2663,4 @@ config HOB_SHARED_RAM_MMI
 	  Provide mechanism to access hob storage shared memory on apps processor.
 	  HOB or the HandOver Block is the staging area for Phasing Data.
 
-config EARLY_RAM_CONSOLE
-	depends on ARCH_MSM
-	default n
-	bool "Use jonpry's early ram buffer (don't leave on!)"
-	help
-	  Buffer is used at start for early logging w/o ram console device
-	  ** Currently this needs CONFIG_SMP disabled in the defconfig
-
 endif
