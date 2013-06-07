@@ -958,7 +958,7 @@ int msm_tsens_early_init(struct tsens_platform_data *pdata)
 
 	tsens_hw_init();
 
-	pr_debug("msm_tsens_early_init: done\n");
+	pr_info("msm_tsens_early_init: done\n");
 
 	return rc;
 }
