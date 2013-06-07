@@ -202,13 +202,18 @@ static struct msm_mmc_pin_data mmc_slot_pin_data[MAX_SDCC_CONTROLLER] = {
 	},
 };
 
+#define MSM_MPM_PIN_SDC1_DAT1	17
+#define MSM_MPM_PIN_SDC3_DAT1	21
+
 static unsigned int sdc1_sup_clk_rates[] = {
 	400000, 24000000, 48000000, 96000000
 };
 
+#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 static unsigned int sdc3_sup_clk_rates[] = {
 	400000, 24000000, 48000000, 96000000
 };
+#endif
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data msm8960_sdc1_data = {
@@ -220,13 +225,15 @@ static struct mmc_platform_data msm8960_sdc1_data = {
 #endif
 	.sup_clk_table	= sdc1_sup_clk_rates,
 	.sup_clk_cnt	= ARRAY_SIZE(sdc1_sup_clk_rates),
-//	.pclk_src_dfab	= 1,
 	.nonremovable	= 1,
 	.vreg_data	= &mmc_slot_vreg_data[SDCC1],
 	.pin_data	= &mmc_slot_pin_data[SDCC1],
+	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC1_DAT1,
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 	.uhs_caps	= (MMC_CAP_UHS_SDR12 | MMC_CAP_UHS_SDR25 |
-			MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_DDR50 |
-			MMC_CAP_1_8V_DDR)
+			MMC_CAP_UHS_SDR50),
+	.uhs_caps2	= MMC_CAP2_HS200_1_8V_SDR,
+	.packed_write	= MMC_CAP2_PACKED_WR | MMC_CAP2_PACKED_WR_CONTROL,
 };
 #endif
 
@@ -236,7 +243,6 @@ static struct mmc_platform_data msm8960_sdc3_data = {
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
 	.sup_clk_table	= sdc3_sup_clk_rates,
 	.sup_clk_cnt	= ARRAY_SIZE(sdc3_sup_clk_rates),
-//	.pclk_src_dfab	= 1,
 #ifdef CONFIG_MMC_MSM_SDC3_WP_SUPPORT
 	.wpswitch_gpio	= PM8921_GPIO_PM_TO_SYS(16),
 #endif
@@ -247,31 +253,35 @@ static struct mmc_platform_data msm8960_sdc3_data = {
 	.status_irq	= PM8921_GPIO_IRQ(PM8921_IRQ_BASE, 26),
 	.irq_flags	= IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 #endif
-	// FIXME-HASH: Check this (from board-8960.c)
 	.is_status_gpio_active_low = true,
 	.xpc_cap	= 1,
 	.uhs_caps	= (MMC_CAP_UHS_SDR12 | MMC_CAP_UHS_SDR25 |
 			MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_DDR50 |
 			MMC_CAP_MAX_CURRENT_600),
-	// FIXME-HASH: Doesn't look like we set this in 3.0
-	// .mpm_sdiowakeup_int = MSM_MPM_PIN_SDC3_DAT1,
-
-	// FIXME-HASH: Doesn't look like we set this in 3.0, getting rid of a compiler warning
+	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC3_DAT1,
 	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
-	.msm_bus_voting_data = NULL,
 };
 #endif
 
 void __init msm8960_init_mmc(unsigned sd_detect)
 {
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
-	msm8960_sdc1_data.cpu_dma_latency = msm_rpm_get_swfi_latency();
+	/*
+	 * When eMMC runs in DDR mode on CDP platform, we have
+	 * seen instability due to DATA CRC errors. These errors are
+	 * attributed to long physical path between MSM and eMMC on CDP.
+	 * So let's not enable the DDR mode on CDP platform but let other
+	 * platforms take advantage of eMMC DDR mode.
+	 */
+	if (!machine_is_msm8960_cdp())
+		msm8960_sdc1_data.uhs_caps |= (MMC_CAP_1_8V_DDR |
+					       MMC_CAP_UHS_DDR50);
 	/* SDC1 : eMMC card connected */
 	msm_add_sdcc(1, &msm8960_sdc1_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
-	msm8960_sdc3_data.cpu_dma_latency = msm_rpm_get_swfi_latency();
 	/* SDC3: External card slot */
+	pr_info("using GPIO %u as sd_detect\n", sd_detect);
 	msm8960_sdc3_data.status_gpio	= PM8921_GPIO_PM_TO_SYS(sd_detect);
 	msm8960_sdc3_data.status_irq = PM8921_GPIO_IRQ(PM8921_IRQ_BASE, sd_detect);
 	msm_add_sdcc(3, &msm8960_sdc3_data);
