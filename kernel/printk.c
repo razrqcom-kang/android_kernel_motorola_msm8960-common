@@ -820,10 +820,6 @@ static int have_callable_console(void)
  * See the vsnprintf() documentation for format string extensions over C99.
  */
 
-#ifdef CONFIG_EARLY_RAM_CONSOLE
-void my_out_va(const char* str, va_list va);
-#endif
-
 asmlinkage int printk(const char *fmt, ...)
 {
 	va_list args;
@@ -845,10 +841,6 @@ asmlinkage int printk(const char *fmt, ...)
 	}
 #endif
 	va_start(args, fmt);
-#ifdef CONFIG_EARLY_RAM_CONSOLE
-	if(preferred_console==-1)
-		my_out_va(fmt, args);
-#endif
 	r = vprintk(fmt, args);
 	va_end(args);
 

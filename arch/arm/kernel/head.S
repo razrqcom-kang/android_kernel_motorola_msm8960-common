@@ -304,12 +304,6 @@ __create_page_tables:
 	orr	r3, r7, #0x7c000000
 	str	r3, [r0]
 #endif
-#ifdef CONFIG_EARLY_RAM_CONSOLE
-	ldr	r12, =0xbf700000
-	add	r0, r4, r12, lsr #(SECTION_SHIFT - PMD_ORDER)
-	orr	r3, r7, r12
-	str	r3, [r0]
-#endif
 #ifdef CONFIG_ARCH_RPC
 	/*
 	 * Map in screen at 0x02000000 & SCREEN2_BASE
@@ -472,7 +466,6 @@ ENTRY(__turn_mmu_on)
 	mcreq	p15, 7, r3, c15, c0, 2
 #endif
 	mov	r3, r13
-
 	mov	pc, r3
 __turn_mmu_on_end:
 ENDPROC(__turn_mmu_on)
