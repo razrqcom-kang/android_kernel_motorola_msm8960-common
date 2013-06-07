@@ -1768,6 +1768,8 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_pcm_routing,
 	&msm_cpudai0,
 	&msm_cpudai1,
+	&msm8960_cpudai_slimbus_2_rx,
+	&msm8960_cpudai_slimbus_2_tx,
 	&msm_cpudai_hdmi_rx,
 	&msm_cpudai_bt_rx,
 	&msm_cpudai_bt_tx,
@@ -2989,6 +2991,7 @@ static void (*reboot_ptr)(void);
 
 static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
 	.max_clock_speed = 15060000,
+	.infinite_mode	 = 0xFFC0,
 };
 
 #define EXPECTED_MBM_PROTOCOL_VERSION 1
