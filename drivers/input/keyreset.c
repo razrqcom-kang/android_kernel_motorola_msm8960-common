@@ -33,12 +33,16 @@ struct keyreset_state {
 	int key_down_target;
 	int key_down;
 	int key_up;
+	struct timer_list timer;
 	int restart_disabled;
 	int restart_requested;
+	int delay;
 	int (*reset_fn)(void);
 	int down_time_ms;
 	struct delayed_work restart_work;
 };
+
+int crash_requested;
 
 static void deferred_restart(struct work_struct *work)
 {
@@ -54,6 +58,24 @@ static void deferred_restart(struct work_struct *work)
 		sys_sync();
 		state->restart_requested = 3;
 		kernel_restart(NULL);
+	}
+}
+
+static void keyreset_timer(unsigned long data)
+{
+	struct keyreset_state *state = (struct keyreset_state *) data;
+	if (restart_requested)
+		panic("keyboard reset failed, %d", restart_requested);
+	printk(KERN_EMERG "current process is %d:%s, prio is %d.\n",
+		current->pid, current->comm, current->prio);
+	dump_stack();
+
+	if (state->reset_fn) {
+		restart_requested = state->reset_fn();
+	} else {
+		pr_info("keyboard reset\n");
+		schedule_work(&restart_work);
+		restart_requested = 1;
 	}
 }
 
@@ -105,18 +127,10 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 	if (value && !state->restart_disabled &&
 	    state->key_down == state->key_down_target) {
 		state->restart_disabled = 1;
-		if (state->restart_requested)
-			panic("keyboard reset failed, %d",
-			      state->restart_requested);
-		if (state->reset_fn && state->down_time_ms == 0) {
-			state->restart_requested = state->reset_fn();
-		} else {
-			pr_info("keyboard reset (delayed %dms)\n",
-				state->down_time_ms);
-			schedule_delayed_work(&state->restart_work,
-				msecs_to_jiffies(state->down_time_ms));
-			state->restart_requested = 1;
-		}
+		mod_timer(&state->timer, jiffies +
+			msecs_to_jiffies(state->delay));
+	} else
+		del_timer(&state->timer);
 	}
 done:
 	spin_unlock_irqrestore(&state->lock, flags);
@@ -224,6 +238,12 @@ static int keyreset_probe(struct platform_device *pdev)
 
 	if (pdata->reset_fn)
 		state->reset_fn = pdata->reset_fn;
+
+	if (pdata->delay) 
+		state->delay = pdata->delay;
+	else
+		state->delay =3000;
+	setup_timer(&state->timer, keyreset_timer, (unsigned long)state);
 
 	if (pdata->down_time_ms)
 		state->down_time_ms = pdata->down_time_ms;
