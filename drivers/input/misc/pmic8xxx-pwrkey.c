@@ -38,11 +38,38 @@ struct pmic8xxx_pwrkey {
 	int key_release_irq;
 	bool press;
 	const struct pm8xxx_pwrkey_platform_data *pdata;
+	struct hrtimer very_longPress_timer;
+	int do_reboot;
+	struct work_struct buzz_work;
+	void (*do_fbuzz)(void);
+	void (*do_freboot)(void);
 };
+
+static void buzz_notify(struct work_struct *work)
+{
+	struct pmic8xxx_pwrkey *pwrkey =
+		container_of(work, struct pmic8xxx_pwrkey, buzz_work);
+
+	if (pwrkey->do_fbuzz)
+		pwrkey->do_fbuzz();
+}
+
+static enum hrtimer_restart very_longPress_timer_callback(struct hrtimer *timer)
+{
+	struct pmic8xxx_pwrkey *pwrkey =
+		container_of(timer, struct pmic8xxx_pwrkey, very_longPress_timer);
+
+	pwrkey->do_reboot++;
+	pr_info("Power key held for 7 seconds; will reboot on release.\n");
+	schedule_work(&pwrkey->buzz_work);
+
+	return HRTIMER_NORESTART;
+}
 
 static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
+	struct timespec uptime;
 
 	if (pwrkey->press == true) {
 		pwrkey->press = false;
@@ -50,7 +77,16 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 	} else {
 		pwrkey->press = true;
 	}
+	pwrkey->do_reboot = 0;
 
+	do_posix_clock_monotonic_gettime(&uptime);
+
+	if (uptime.tv_sec > 50)  {
+		hrtimer_start(&pwrkey->very_longPress_timer,
+			ktime_set(7, 0), HRTIMER_MODE_REL);
+	}
+
+	pr_info("Report pwrkey press event\n"); 
 	input_report_key(pwrkey->pwr, KEY_POWER, 1);
 	input_sync(pwrkey->pwr);
 
@@ -69,6 +105,14 @@ static irqreturn_t pwrkey_release_irq(int irq, void *_pwrkey)
 		pwrkey->press = false;
 	}
 
+	hrtimer_cancel(&pwrkey->very_longPress_timer);
+
+	if (pwrkey->do_reboot) {
+		pr_info("Power key released; REBOOTING.\n");
+		if (pwrkey->do_freboot)
+			pwrkey->do_freboot();
+	}
+	pr_info("Report pwrkey release event\n");
 	input_report_key(pwrkey->pwr, KEY_POWER, 0);
 	input_sync(pwrkey->pwr);
 
@@ -174,6 +218,20 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "Can't register power key: %d\n", err);
 		goto free_input_dev;
 	}
+
+	pwrkey->do_fbuzz = pdata->buzz;
+	pwrkey->do_freboot = pdata->reboot;
+
+	pwrkey->do_reboot = 0;
+
+	INIT_WORK(&pwrkey->buzz_work, buzz_notify);
+
+	hrtimer_init(&(pwrkey->very_longPress_timer),
+		CLOCK_MONOTONIC,
+		HRTIMER_MODE_REL);
+
+	(pwrkey->very_longPress_timer).function =
+		very_longPress_timer_callback;
 
 	pwrkey->key_press_irq = key_press_irq;
 	pwrkey->key_release_irq = key_release_irq;
