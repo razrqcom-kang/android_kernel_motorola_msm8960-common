@@ -23,6 +23,11 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/input/pmic8xxx-pwrkey.h>
 
+#ifdef CONFIG_PM_DEEPSLEEP
+#include <linux/suspend.h>
+#include <linux/wakelock.h>
+#endif
+
 #define PON_CNTL_1 0x1C
 #define PON_CNTL_PULL_UP BIT(7)
 #define PON_CNTL_TRIG_DELAY_MASK (0x7)
@@ -38,11 +43,59 @@ struct pmic8xxx_pwrkey {
 	int key_release_irq;
 	bool press;
 	const struct pm8xxx_pwrkey_platform_data *pdata;
+#ifdef CONFIG_PM_DEEPSLEEP
+	struct hrtimer longPress_timer;
+	int expired;
+	struct wake_lock wake_lock;
+#endif
+	struct hrtimer very_longPress_timer;
+	int do_reboot;
+	struct work_struct buzz_work;
+	void (*do_fbuzz)(void);
+	void (*do_freboot)(void);
 };
+
+#ifdef CONFIG_PM_DEEPSLEEP
+
+static enum hrtimer_restart longPress_timer_callback(struct hrtimer *timer)
+{
+	struct pmic8xxx_pwrkey *pwrkey  =
+		container_of(timer, struct pmic8xxx_pwrkey, longPress_timer);
+
+	pwrkey->expired = 1;
+	input_report_key(pwrkey->pwr, KEY_POWER, 1);
+	input_sync(pwrkey->pwr);
+
+	return HRTIMER_NORESTART;
+
+}
+#endif
+
+static void buzz_notify(struct work_struct *work)
+{
+	struct pmic8xxx_pwrkey *pwrkey =
+		container_of(work, struct pmic8xxx_pwrkey, buzz_work);
+
+	if (pwrkey->do_fbuzz)
+		pwrkey->do_fbuzz();
+}
+
+static enum hrtimer_restart very_longPress_timer_callback(struct hrtimer *timer)
+{
+	struct pmic8xxx_pwrkey *pwrkey =
+		container_of(timer, struct pmic8xxx_pwrkey, very_longPress_timer);
+
+	pwrkey->do_reboot++;
+	pr_info("Power key held for 7 seconds; will reboot on release.\n");
+	schedule_work(&pwrkey->buzz_work);
+
+	return HRTIMER_NORESTART;
+}
 
 static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
+	struct timespec uptime;
 
 	if (pwrkey->press == true) {
 		pwrkey->press = false;
@@ -51,9 +104,29 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 		pwrkey->press = true;
 	}
 
+	pwrkey->do_reboot = 0;
+
+	do_posix_clock_monotonic_gettime(&uptime);
+
+	if (uptime.tv_sec > 50)	{
+		hrtimer_start(&pwrkey->very_longPress_timer,
+				ktime_set(7, 0), HRTIMER_MODE_REL);
+	}
+
+#ifdef CONFIG_PM_DEEPSLEEP
+
+	if (get_deepsleep_mode()) {
+		pwrkey->expired = 0;
+		hrtimer_start(&pwrkey->longPress_timer,
+					ktime_set(2, 0), HRTIMER_MODE_REL);
+		wake_lock_timeout(&pwrkey->wake_lock, 2*HZ+5);
+	} else
+#endif
+	{
+	pr_info("Report pwrkey press event\n");
 	input_report_key(pwrkey->pwr, KEY_POWER, 1);
 	input_sync(pwrkey->pwr);
-
+	}
 	return IRQ_HANDLED;
 }
 
@@ -69,9 +142,30 @@ static irqreturn_t pwrkey_release_irq(int irq, void *_pwrkey)
 		pwrkey->press = false;
 	}
 
+	hrtimer_cancel(&pwrkey->very_longPress_timer);
+
+	if (pwrkey->do_reboot) {
+		pr_info("Power key released; REBOOTING.\n");
+		if (pwrkey->do_freboot)
+			pwrkey->do_freboot();
+	}
+
+#ifdef CONFIG_PM_DEEPSLEEP
+	if (get_deepsleep_mode()) {
+		hrtimer_cancel(&pwrkey->longPress_timer);
+		if (pwrkey->expired == 1) {
+			pwrkey->expired = 0;
+			input_report_key(pwrkey->pwr, KEY_POWER, 0);
+			input_sync(pwrkey->pwr);
+		}
+		wake_lock_timeout(&pwrkey->wake_lock, 5);
+	} else
+#endif
+	{
+	pr_info("Report pwrkey release event\n");
 	input_report_key(pwrkey->pwr, KEY_POWER, 0);
 	input_sync(pwrkey->pwr);
-
+	}
 	return IRQ_HANDLED;
 }
 
@@ -175,6 +269,20 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 		goto free_input_dev;
 	}
 
+	pwrkey->do_fbuzz = pdata->buzz;
+	pwrkey->do_freboot = pdata->reboot;
+
+	pwrkey->do_reboot = 0;
+
+	INIT_WORK(&pwrkey->buzz_work, buzz_notify);
+
+	hrtimer_init(&(pwrkey->very_longPress_timer),
+			CLOCK_MONOTONIC,
+			HRTIMER_MODE_REL);
+
+	(pwrkey->very_longPress_timer).function =
+		very_longPress_timer_callback;
+
 	pwrkey->key_press_irq = key_press_irq;
 	pwrkey->key_release_irq = key_release_irq;
 	pwrkey->pwr = pwr;
@@ -211,6 +319,16 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 		goto free_press_irq;
 	}
 
+#ifdef CONFIG_PM_DEEPSLEEP
+
+	hrtimer_init(&(pwrkey->longPress_timer),
+			CLOCK_MONOTONIC,
+			HRTIMER_MODE_REL);
+
+	(pwrkey->longPress_timer).function = longPress_timer_callback;
+	wake_lock_init(&pwrkey->wake_lock, WAKE_LOCK_SUSPEND, "pwrkey");
+#endif
+
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
 
 	return 0;
@@ -235,7 +353,9 @@ static int __devexit pmic8xxx_pwrkey_remove(struct platform_device *pdev)
 	int key_press_irq = platform_get_irq(pdev, 1);
 
 	device_init_wakeup(&pdev->dev, 0);
-
+#ifdef CONFIG_PM_DEEPSLEEP
+	wake_lock_destroy(&pwrkey->wake_lock);
+#endif
 	free_irq(key_press_irq, pwrkey);
 	free_irq(key_release_irq, pwrkey);
 	input_unregister_device(pwrkey->pwr);
