@@ -196,10 +196,8 @@ extern struct regulator_init_data msm_saw_regulator_pdata_s5;
 extern struct regulator_init_data msm_saw_regulator_pdata_s6;
 
 extern struct rpm_regulator_platform_data msm_rpm_regulator_pdata __devinitdata;
-extern struct lcdc_platform_data dtv_pdata;
 extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk0;
 extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk1;
-extern struct platform_device hdmi_msm_device;
 extern struct platform_device android_usb_device;
 
 extern struct msm_otg_platform_data msm_otg_pdata;
@@ -290,7 +288,7 @@ extern struct msm_camera_board_info msm8960_camera_board_info;
 
 uint32_t msm_rpm_get_swfi_latency(void);
 void msm8960_init_cam(void);
-void msm8960_init_fb(int (*detect_client)(const char *name));
+void msm8960_init_fb(int (*detect_client)(const char *name), int mmi_feature_hdmi);
 void msm8960_init_pmic(void);
 void msm8960_init_mmc(unsigned sd_detect);
 int msm8960_init_gpiomux(void);

@@ -1804,12 +1804,6 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&pm8xxx_rgb_leds_device,
 };
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL	/* HDMI support */
-static struct platform_device *mmi_hdmi_devices[] __initdata = {
-	&hdmi_msm_device,
-};
-#endif
-
 static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
 	.mode = MSM_PM_BOOT_CONFIG_TZ,
 };
@@ -3142,9 +3136,6 @@ static void __init msm8960_mmi_init(void)
 	config_mdp_vsync_from_dt();
 	gpiomux_init(use_mdp_vsync);
 	mot_gpiomux_init(keypad_mode);
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-	msm8960_init_hdmi(&hdmi_msm_device);
-#endif
 
 	load_pm8921_gpios_from_dt();
 	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 45,
@@ -3186,12 +3177,6 @@ static void __init msm8960_mmi_init(void)
 
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-	mmi_dt_get_hdmi_feature(&mmi_feature_hdmi);
-	if (mmi_feature_hdmi)
-		platform_add_devices(mmi_hdmi_devices, ARRAY_SIZE(mmi_hdmi_devices));
-#endif
-
 #ifdef CONFIG_MSM_CAMERA
 //	msm8960_init_cam();
 #endif
@@ -3204,7 +3189,10 @@ static void __init msm8960_mmi_init(void)
 		platform_device_register(&msm8960_device_acpuclk);
 
 	register_i2c_devices();
-	msm8960_init_fb(msm_fb_detect_panel);
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
+	mmi_dt_get_hdmi_feature(&mmi_feature_hdmi);
+#endif
+	msm8960_init_fb(msm_fb_detect_panel, mmi_feature_hdmi);
 	msm8960_init_slim();
 	msm8960_init_dsps();
 	if (!uart_over_gsbi12)
