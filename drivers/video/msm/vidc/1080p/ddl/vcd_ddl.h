@@ -274,6 +274,7 @@ struct ddl_encoder_data{
 	u32  ext_enc_control_val;
 	u32  num_references_for_p_frame;
 	u32  closed_gop;
+	u32  num_slices_comp;
 	struct vcd_property_slice_delivery_info slice_delivery_info;
 	struct ddl_batch_frame_data batch_frame;
 };
@@ -307,6 +308,7 @@ struct ddl_decoder_data {
 	u32  header_in_start;
 	u32  min_dpb_num;
 	u32  y_cb_cr_size;
+	u32  yuv_size;
 	u32  dynamic_prop_change;
 	u32  dynmic_prop_change_req;
 	u32  flush_pending;
@@ -317,6 +319,8 @@ struct ddl_decoder_data {
 	u32  cont_mode;
 	u32  reconfig_detected;
 	u32  dmx_disable;
+	int avg_dec_time;
+	int dec_time_sum;
 };
 union ddl_codec_data{
 	struct ddl_codec_data_hdr  hdr;
@@ -481,4 +485,8 @@ u32 ddl_fw_init(struct ddl_buf_addr *dram_base);
 void ddl_get_fw_info(const unsigned char **fw_array_addr,
 	unsigned int *fw_size);
 void ddl_fw_release(struct ddl_buf_addr *);
+int ddl_vidc_decode_get_avg_time(struct ddl_client_context *ddl);
+void ddl_vidc_decode_reset_avg_time(struct ddl_client_context *ddl);
+void ddl_calc_core_proc_time(const char *func_name, u32 index,
+		struct ddl_client_context *ddl);
 #endif

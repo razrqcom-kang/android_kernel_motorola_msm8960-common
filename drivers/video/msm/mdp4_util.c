@@ -199,13 +199,14 @@ void mdp4_sw_reset(ulong bits)
 
 	bits &= 0x1f;	/* 5 bits */
 	outpdw(MDP_BASE + 0x001c, bits);	/* MDP_SW_RESET */
+	wmb();
 
 	while (inpdw(MDP_BASE + 0x001c) & bits) /* self clear when complete */
 		;
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
-	MSM_FB_DEBUG("mdp4_sw_reset: 0x%x\n", (int)bits);
+	pr_debug("mdp4_sw_reset: 0x%x\n", (int)bits);
 }
 
 void mdp4_overlay_cfg(int overlayer, int blt_mode, int refresh, int direct_out)
@@ -391,9 +392,7 @@ void mdp4_hw_init(void)
 	int i;
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-
-	mdp_bus_scale_update_request
-		(MDP_BUS_SCALE_INIT, MDP_BUS_SCALE_INIT);
+	mdp_clk_ctrl(1);
 
 #ifdef MDP4_ERROR
 	/*
@@ -445,8 +444,6 @@ void mdp4_hw_init(void)
 
 	/* max read pending cmd config */
 	outpdw(MDP_BASE + 0x004c, 0x02222);	/* 3 pending requests */
-	outpdw(MDP_BASE + 0x0400, 0x7FF);
-	outpdw(MDP_BASE + 0x0404, 0x30050);
 
 #ifndef CONFIG_FB_MSM_OVERLAY
 	/* both REFRESH_MODE and DIRECT_OUT are ignored at BLT mode */
@@ -457,6 +454,11 @@ void mdp4_hw_init(void)
 	clk_rate = mdp_get_core_clk();
 	mdp4_fetch_cfg(clk_rate);
 
+	if (mdp_rev >= MDP_REV_42) {
+		/* MDP_LAYERMIXER_IN_CFG_UPDATE_METHOD */
+		outpdw(MDP_BASE + 0x100fc, 0x01);
+	}
+
 	/* Mark hardware as initialized. Only revisions > v2.1 have a register
 	 * for tracking core reset status. */
 	if (mdp_hw_revision > MDP4_REVISION_V2_1)
@@ -464,6 +466,7 @@ void mdp4_hw_init(void)
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	mdp_clk_ctrl(0);
 }
 
 
@@ -1386,6 +1389,14 @@ struct mdp_csc_cfg mdp_csc_convert[4] = {
 		{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
 	},
 };
+
+void mdp4_vg_csc_restore(void)
+{
+        int i;
+
+        for (i = 0; i < CSC_MAX_BLOCKS; i++)
+                mdp4_csc_config(&csc_cfg_matrix[i]);
+}
 
 
 void mdp4_vg_csc_update(struct mdp_csc *p)
@@ -2671,18 +2682,17 @@ static int update_ar_gc_lut(uint32_t *offset, struct mdp_pgc_lut_data *lut_data)
 	uint32_t *c2_params_offset = (uint32_t *)((uint32_t)c2_offset
 						+MDP_GC_PARMS_OFFSET);
 
-
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (count = 0; count < MDP_AR_GC_MAX_STAGES; count++) {
-		if (count < lut_data->num_r_stages) {
+		if (count < lut_data->num_g_stages) {
 			outpdw(c0_offset+count,
-				((0xfff & lut_data->r_data[count].x_start)
+				((0xfff & lut_data->g_data[count].x_start)
 					| 0x10000));
 
 			outpdw(c0_params_offset+count,
-				((0x7fff & lut_data->r_data[count].slope)
+				((0x7fff & lut_data->g_data[count].slope)
 					| ((0xffff
-					& lut_data->r_data[count].offset)
+					& lut_data->g_data[count].offset)
 						<< 16)));
 		} else
 			outpdw(c0_offset+count, 0);
@@ -2700,15 +2710,15 @@ static int update_ar_gc_lut(uint32_t *offset, struct mdp_pgc_lut_data *lut_data)
 		} else
 			outpdw(c1_offset+count, 0);
 
-		if (count < lut_data->num_g_stages) {
+		if (count < lut_data->num_r_stages) {
 			outpdw(c2_offset+count,
-				((0xfff & lut_data->g_data[count].x_start)
+				((0xfff & lut_data->r_data[count].x_start)
 					| 0x10000));
 
 			outpdw(c2_params_offset+count,
-				((0x7fff & lut_data->g_data[count].slope)
+				((0x7fff & lut_data->r_data[count].slope)
 				| ((0xffff
-				& lut_data->g_data[count].offset)
+				& lut_data->r_data[count].offset)
 					<< 16)));
 		} else
 			outpdw(c2_offset+count, 0);
