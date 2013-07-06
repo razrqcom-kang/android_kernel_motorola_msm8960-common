@@ -19,18 +19,19 @@
     OUT=$KERNEL/arch/arm/boot
 
     # These are extra variables designed to make things easier
-    MODULES=$TOOLS/Updater-Scripts/XT897_cm/system/lib/modules
+    CLEANUP=$TOOLS/Updater-Scripts/XT897_cm
+    MODULES=$CLEANUP/system/lib/modules
     KERNELNAME=$1
 
     # Set our Ramdisk locations (uncomment teh CM ones when you actually need them :) )
     #RAMDISK=/media/raid/dev/kernel/ramdisk_jb
     #CMRAMDISK=~/xt897/Ramdisks/XT897-CM
-    CM101RAMDISK=/media/raid/dev/kernel/ramdisk_cm101
+    RAMDISK=/media/raid/dev/kernel/ramdisk_cm101
 
     # These are for mkbootimg
     BASE="--base 0x80200000"
     PAGE="--pagesize 2048"
-    RAMADDR="--ramdiskaddr 0x81600000"
+    RAMADDR="--ramdiskaddr 0x01600000"
 
     # Edit this to change the kernel name
     KBUILD_BUILD_VERSION=$1
@@ -44,8 +45,10 @@
     # This cleans out crud and makes new config
     $MAKE clean
     $MAKE mrproper
-    rm -rf $MODULES
-    rm -rf $PACK
+    rm -rf $MODULES | tee /var/www/logs/cmkernelbuildlog.txt
+    rm -rf $CLEANUP/arrrghhh*
+    rm -rf $CLEANUP/boot.img
+    rm -rf $PACK | tee /var/www/logs/cmkernelbuildlog.txt
     [ -d "$PACK" ] || mkdir "$PACK"
     [ -d "$MODULES" ] || mkdir -p "$MODULES"
 #    exec > >(tee $PACK/buildlog.txt) 2>&1 
@@ -85,7 +88,7 @@
     cd $PACK
 	cp $OUT/zImage $PACK
 	$TOOLS/mkbootfs $RAMDISK | gzip > $PACK/ramdisk.gz
-	$TOOLS/mkbootimg --cmdline "console=/dev/null androidboot.hardware=qcom user_debug=31 loglevel=1 msm_rtb.filter=0x3F kgsl.mmutype=gpummu" --kernel $PACK/zImage --ramdisk $PACK/ramdisk.gz $PAGE $BASE $RAMADDR -o $PACK/boot.img
+	$TOOLS/mkbootimg --cmdline "console=/dev/null androidboot.hardware=qcom user_debug=31 loglevel=1 zcache" --kernel $PACK/zImage --ramdisk $PACK/ramdisk.gz $PAGE $BASE $RAMADDR -o $PACK/boot.img
 	rm -rf ramdisk.gz
 	rm -rf zImage
 	cp -R $TOOLS/Updater-Scripts/XT897_cm/* $PACK
